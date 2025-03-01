@@ -66,10 +66,11 @@ RAM (xrw)      : ORIGIN = 0x24000000, LENGTH = 512K
 RAM_D2 (xrw)      : ORIGIN = 0x30000000, LENGTH = 288K
 RAM_D3 (xrw)      : ORIGIN = 0x38000000, LENGTH = 64K
 ITCMRAM (xrw)      : ORIGIN = 0x00000000, LENGTH = 64K
-FLASH (rx)      : ORIGIN = 0x90000000, LENGTH = 1024K
-WEB_RESOURCES_FLASH (rx)      : ORIGIN = 0x90200000, LENGTH = 1024K
-ADC_VALUES_MAPPING_FLASH (rx)      : ORIGIN = 0x90300000, LENGTH = 1024K
-CONFIG_FLASH (rx)      : ORIGIN = 0x90400000, LENGTH = 1024K
+METADATA_FLASH (rx)      : ORIGIN = 0x90000000, LENGTH = 8192
+FLASH (rx)      : ORIGIN = 0x90002000, LENGTH = 2048K
+WEB_RESOURCES_FLASH (rx)      : ORIGIN = 0x90202000, LENGTH = 1024K
+ADC_VALUES_MAPPING_FLASH (rx)      : ORIGIN = 0x90302000, LENGTH = 1024K
+CONFIG_FLASH (rx)      : ORIGIN = 0x90402000, LENGTH = 1024K
 }
 
 /* Define output sections */
@@ -84,15 +85,6 @@ SECTIONS
     . = ALIGN(4);
     _evector = .;           /* 添加向量表结束标记 */
   } >RAM AT>FLASH
-
-  /* Reset_Handler 必须在 Flash */
-  .text.boot :
-  {
-    . = ALIGN(4);
-    *(.text.boot.Reset_Handler)  /* 把Reset_Handler 放在 Flash */
-    *(.text.startup)
-    . = ALIGN(4);
-  } >FLASH
 
   /* 其他代码在 RAM */
   _sitext = LOADADDR(.text);

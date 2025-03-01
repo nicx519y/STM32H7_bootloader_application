@@ -233,8 +233,68 @@ LIBDIR =
 LDFLAGS = $(MCU) -T$(LDSCRIPT) $(LIBDIR) $(LIBS) -Wl,-Map=$(BUILD_DIR)/$(TARGET).map,--cref -Wl,--gc-sections
 LDFLAGS += --specs=nosys.specs --specs=nano.specs -u _printf_float
 
+
+# 生成 metadata
+#
+# metadata.bin 文件结构:
+#
+# ┌───────────────────────────────────┐
+# │ 段数量 (4 bytes)                   │ 无符号整数，表示ELF文件中的段数量
+# ├───────────────────────────────────┤
+# │ 第一段信息:                        │
+# │  ├─ 段名长度 (4 bytes)            │ 无符号整数，表示段名的字节长度
+# │  ├─ 段名 (N bytes)                │ UTF-8编码的字符串（如 .text, .data 等）
+# │  ├─ 段大小 (4 bytes)              │ 无符号整数，表示段的大小（字节数）
+# │  ├─ VMA地址 (4 bytes)             │ 无符号整数，虚拟内存地址
+# │  └─ LMA地址 (4 bytes)             │ 无符号整数，加载内存地址
+# ├───────────────────────────────────┤
+# │ 第二段信息:                        │
+# │  ├─ 段名长度 (4 bytes)            │
+# │  ├─ 段名 (N bytes)                │
+# │  ├─ 段大小 (4 bytes)              │
+# │  ├─ VMA地址 (4 bytes)             │
+# │  └─ LMA地址 (4 bytes)             │
+# ├───────────────────────────────────┤
+# │ ... 更多段信息 ...                 │
+# └───────────────────────────────────┘
+#
+# 说明:
+# - 所有整数采用小端序 (Little Endian) 格式
+# - VMA (Virtual Memory Address): 程序运行时的虚拟地址
+# - LMA (Load Memory Address): 加载到Flash中的物理地址
+#
+# C语言结构体描述:
+# 
+# // 文件头结构体
+# typedef struct {
+#     uint32_t num_sections;  // 段数量
+# } MetadataHeader;
+# 
+# // 段名是变长的，所以在内存中需要动态处理
+# // 在文件中的布局如下:
+# typedef struct {
+#     uint32_t name_length;   // 段名长度
+#     char name[1];           // 变长段名 (实际长度为name_length)
+#     // 段名之后是以下字段:
+#     // uint32_t size;       // 段大小
+#     // uint32_t vma;        // 虚拟内存地址
+#     // uint32_t lma;        // 加载内存地址
+# } SectionInfo;
+# 
+# // 读取时可以使用以下结构体
+# typedef struct {
+#     char* name;             // 动态分配的段名
+#     uint32_t size;          // 段大小
+#     uint32_t vma;           // 虚拟内存地址
+#     uint32_t lma;           // 加载内存地址
+# } Section;
+# 
+metadata: $(BUILD_DIR)/$(TARGET).elf
+	@echo "Generating metadata from ELF file..."
+	python extract_metadata.py $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/metadata.bin
+
 # default action: build all
-all: $(BUILD_DIR)/$(TARGET).elf $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin
+all: $(BUILD_DIR)/$(TARGET).hex $(BUILD_DIR)/$(TARGET).bin $(BUILD_DIR)/metadata.bin
 
 
 #######################################
@@ -276,6 +336,7 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 $(BUILD_DIR):
 	@if not exist "$(BUILD_DIR)" mkdir "$(BUILD_DIR)"
 
+
 #######################################
 # clean up
 #######################################
@@ -286,19 +347,28 @@ clean:
 
 #######################################
 # flash
+# 写入 metadata.bin 到 0x00000000
+# 写入 $(TARGET).hex 到 0x00002000 预留 8192 字节 用于存储 metadata.bin
+# 验证 metadata.bin 到 0x00000000
+# 验证 $(TARGET).hex 到 0x00002000
+# -c "program $(BUILD_DIR)/$(TARGET).elf verify" \
 #######################################
-  
-flash: $(BUILD_DIR)/$(TARGET).hex
+
+
+flash: $(BUILD_DIR)/$(TARGET).elf metadata
 	openocd \
 	-d0 \
 	-f Openocd_Script/ST-LINK-QSPIFLASH.cfg \
 	-c init \
 	-c halt \
 	-c "reset init" \
-	-c "flash write_image erase $(BUILD_DIR)/$(TARGET).hex 0x00000000" \
-	-c "flash verify_image $(BUILD_DIR)/$(TARGET).hex 0x00000000" \
+	-c "program $(BUILD_DIR)/$(TARGET).elf verify" \
+	-c "flash write_image $(BUILD_DIR)/metadata.bin 0x90000000" \
+	-c "flash verify_image $(BUILD_DIR)/metadata.bin 0x90000000" \
 	-c "reset run" \
-	-c shutdown 
+	-c shutdown
+
+
 
 # 添加调试目标，用于打印变量
 debug:

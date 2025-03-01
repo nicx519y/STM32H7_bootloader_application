@@ -15,53 +15,44 @@
   *
   ******************************************************************************
   */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+
 #include "main.h"
 #include "usb_otg_hs.h"
-
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
 #include "usart.h"
 #include "qspi-w25q64.h"
 #include "board_cfg.h"
-/* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
-/* Private variables ---------------------------------------------------------*/
 HCD_HandleTypeDef hhcd_USB_OTG_HS;
 
-/* USER CODE BEGIN PV */
-
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void PeriphCommonClock_Config(void);
 static void MPU_Config(void);
+bool readMetadata(void);
+void copyApplicationToRAM(void);
 void JumpToApplication(void);
-/* USER CODE BEGIN PFP */
 
-/* USER CODE END PFP */
+// metadata.bin 的 Flash 地址
+#define METADATA_ADDR 0x00000000
+#define MAX_METADATA_SIZE 8192  // 最大元数据大小，根据实际情况调整
+#define SECTION_NAME_LENGTH 32  // 段名固定长度，与 Python 脚本保持一致
 
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
+// 结构体定义
+typedef struct {
+    uint32_t num_sections;  // 段数量
+} MetadataHeader;
 
-/* USER CODE END 0 */
+typedef struct {
+    char name[SECTION_NAME_LENGTH]; // 固定长度段名
+    uint32_t size;                  // 段大小
+    uint32_t vma;                   // 虚拟内存地址
+    uint32_t lma;                   // 加载内存地址
+} SectionInfo;
+
+// 全局变量，存储元数据信息
+static uint8_t g_metadata_buffer[MAX_METADATA_SIZE];
+static uint32_t g_num_sections = 0;
+static bool g_metadata_loaded = false;
+
 
 /**
   * @brief  The application entry point.
@@ -76,11 +67,10 @@ int main(void)
 
   USART1_Init();
   QSPI_W25Qxx_Init();
-  QSPI_W25Qxx_Test(0x00300000);
   BOOT_DBG("QSPI_W25Qxx_Init success\r\n");
 
+  copyApplicationToRAM();
   JumpToApplication();
-
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
@@ -230,40 +220,55 @@ void MPU_Config(void)
 
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
-{
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
-  /* USER CODE END Error_Handler_Debug */
-}
-
-
-
 void JumpToApplication(void)
 {
-    // 进入内存映射模式
-    if(QSPI_W25Qxx_EnterMemoryMappedMode() != QSPI_W25Qxx_OK)
-    {
-      BOOT_ERR("QSPI_W25Qxx_EnterMemoryMappedMode failed\r\n");
+    // 确保元数据已加载
+    if (!g_metadata_loaded) {
+        if (!readMetadata()) {
+            BOOT_ERR("Failed to read metadata, cannot jump to application");
+            return;
+        }
+    }
+    
+    // 在元数据中查找中断向量表段的VMA地址
+    uint32_t vector_table_addr = 0;
+    uint32_t offset = sizeof(MetadataHeader);
+    
+    for (uint32_t i = 0; i < g_num_sections; i++) {
+        SectionInfo* section = (SectionInfo*)(g_metadata_buffer + offset);
+        
+        char name[SECTION_NAME_LENGTH + 1];
+        memcpy(name, section->name, SECTION_NAME_LENGTH);
+        name[SECTION_NAME_LENGTH] = '\0';
+        
+        if (strcmp(name, ".isr_vector") == 0) {
+            vector_table_addr = section->vma;
+            BOOT_DBG("Found .isr_vector section at VMA: 0x%08lX", vector_table_addr);
+            break;
+        }
+        
+        offset += sizeof(SectionInfo);
+    }
+    
+    if (vector_table_addr == 0) {
+        BOOT_ERR("Could not find .isr_vector section in metadata");
+        return;
     }
 
-    BOOT_DBG("QSPI_W25Qxx_EnterMemoryMappedMode success\r\n");
-
-    uint32_t jump_address = *(__IO uint32_t*)(W25Qxx_Mem_Addr + 4);
-    uint32_t app_stack = *(__IO uint32_t*)W25Qxx_Mem_Addr;
+    // 打印中断向量表 前16个地址的值
+    BOOT_DBG("ISR Vector Table:");
+    for(int i = 0; i < 16; i++) {
+        BOOT_DBG("  Address 0x%08X: 0x%08X", vector_table_addr + i * 4, *(__IO uint32_t*)(vector_table_addr + i * 4));
+    }
     
-    BOOT_DBG("App Stack address: 0x%08X, App Stack value: 0x%08X", W25Qxx_Mem_Addr, *(__IO uint32_t*)W25Qxx_Mem_Addr);
-    BOOT_DBG("Jump Address: 0x%08X, Jump Address value: 0x%08X", W25Qxx_Mem_Addr + 4, *(__IO uint32_t*)(W25Qxx_Mem_Addr + 4));
+    // 从中断向量表获取应用程序堆栈指针和入口点
+    uint32_t app_stack = *(__IO uint32_t*)vector_table_addr;
+    uint32_t jump_address = *(__IO uint32_t*)(vector_table_addr + 4);
+    
+    BOOT_DBG("App Stack address: 0x%08X, App Stack value: 0x%08X", vector_table_addr, app_stack);
+    BOOT_DBG("Jump Address: 0x%08X, Jump Address value: 0x%08X", vector_table_addr + 4, jump_address);
 
-    // 验证栈指针和跳转地址
+    // 验证栈指针
     if ((app_stack & 0xFF000000) != 0x20000000) {
         BOOT_ERR("Invalid stack pointer: 0x%08X", app_stack);
         return;
@@ -271,33 +276,29 @@ void JumpToApplication(void)
         BOOT_DBG("Valid stack pointer: 0x%08X", app_stack);
     }
 
-    if ((jump_address & 0xFF000000) != 0x90000000) {
+    // 验证入口点地址
+    if ((jump_address & 0xFF000000) != 0x24000000) {
         BOOT_ERR("Invalid jump address: 0x%08X", jump_address);
         return;
     } else {
         BOOT_DBG("Valid jump address: 0x%08X", jump_address);
     }
 
-    // 先验证一下目标地址的内容
+    // 验证目标地址的指令内容
     uint16_t* code_ptr = (uint16_t*)(jump_address & ~1UL);
     BOOT_DBG("First instructions at target:");
     for(int i = 0; i < 4; i++) {
         BOOT_DBG("  Instruction %d: 0x%04X", i, code_ptr[i]);
     }
 
-
     /****************************  跳转前准备  ************************* */
-    SysTick->CTRL = 0;		                        // 关闭SysTick
-    SysTick->LOAD = 0;		                        // 清零重载
-    SysTick->VAL = 0;			                        // 清零计数
+    SysTick->CTRL = 0;                          // 关闭SysTick
+    SysTick->LOAD = 0;                          // 清零重载
+    SysTick->VAL = 0;                           // 清零计数
 
-    __set_CONTROL(0); //priviage mode 
-    __disable_irq(); //disable interrupt
+    __set_CONTROL(0); // priviage mode 
+    __disable_irq();  // disable interrupt
     __set_PRIMASK(1);
-
-    /* 禁用缓存 */
-    // SCB_DisableICache();
-    // SCB_DisableDCache();
 
     // 关闭所有中断
     __disable_irq();
@@ -312,8 +313,8 @@ void JumpToApplication(void)
 
     HAL_MPU_Disable();
 
-    // 设置向量表
-    SCB->VTOR = W25Qxx_Mem_Addr;
+    // 设置向量表为应用程序的向量表地址
+    SCB->VTOR = vector_table_addr;
     BOOT_DBG("VTOR set to: 0x%08X", SCB->VTOR);
     
     // 验证向量表设置是否生效
@@ -324,11 +325,6 @@ void JumpToApplication(void)
     // 设置主堆栈指针
     __set_MSP(app_stack);
     BOOT_DBG("MSP set to: 0x%08X", __get_MSP());
-
-    // 清除缓存
-    // SCB_CleanInvalidateDCache();
-    // SCB_InvalidateICache();
-    // BOOT_DBG("Cache cleared");
 
     // 内存屏障
     __DSB();
@@ -357,6 +353,175 @@ void JumpToApplication(void)
     BOOT_ERR("Jump failed!");
     while(1);
 }
+
+// 读取元数据并存储在全局变量中
+bool readMetadata(void)
+{
+    uint32_t offset = 0;
+    
+    BOOT_DBG("Reading metadata from address 0x%08X", METADATA_ADDR);
+    
+    // 读取头部，获取段数量
+    QSPI_W25Qxx_ReadBuffer(g_metadata_buffer, METADATA_ADDR, sizeof(MetadataHeader));
+    MetadataHeader* header = (MetadataHeader*)g_metadata_buffer;
+    
+    BOOT_DBG("Header bytes as uint32: 0x%08lX", header->num_sections);
+    BOOT_DBG("Found %lu sections in metadata", header->num_sections);
+    g_num_sections = header->num_sections;
+    
+    // 估计元数据大小
+    uint32_t estimated_size = sizeof(MetadataHeader) + 
+                              g_num_sections * (SECTION_NAME_LENGTH + 3 * sizeof(uint32_t));
+    if (estimated_size > MAX_METADATA_SIZE) {
+        BOOT_ERR("Estimated metadata size too large: %lu bytes", estimated_size);
+        return false;
+    }
+    
+    // 读取整个元数据块
+    QSPI_W25Qxx_ReadBuffer(g_metadata_buffer, METADATA_ADDR, estimated_size);
+    g_metadata_loaded = true;
+    
+    // 解析并打印元数据
+    offset = sizeof(MetadataHeader);  // 跳过头部
+    
+    for (uint32_t i = 0; i < g_num_sections; i++) {
+        // 从缓冲区获取段信息
+        SectionInfo* section = (SectionInfo*)(g_metadata_buffer + offset);
+        
+        // 确保字符串结束符
+        char name[SECTION_NAME_LENGTH + 1];
+        memcpy(name, section->name, SECTION_NAME_LENGTH);
+        name[SECTION_NAME_LENGTH] = '\0';
+        
+        // 输出段信息
+        BOOT_DBG("Section %lu: %s", i, name);
+        BOOT_DBG("  Size: 0x%08lX (%lu bytes)", section->size, section->size);
+        BOOT_DBG("  VMA: 0x%08lX", section->vma);
+        BOOT_DBG("  LMA: 0x%08lX", section->lma);
+        
+        // 移动到下一个段
+        offset += sizeof(SectionInfo);
+    }
+    
+    BOOT_DBG("Metadata parsing complete");
+    return true;
+}
+
+// 使用已加载的元数据复制应用到RAM
+void copyApplicationToRAM(void)
+{
+    if (!g_metadata_loaded) {
+        if (!readMetadata()) {
+            BOOT_ERR("Failed to read metadata");
+            return;
+        }
+    }
+    
+    BOOT_DBG("Starting application copy to RAM...");
+    uint32_t offset = sizeof(MetadataHeader);  // 跳过头部
+    
+    // 首先找到并处理.bss段（先清零）
+    for (uint32_t i = 0; i < g_num_sections; i++) {
+        SectionInfo* section = (SectionInfo*)(g_metadata_buffer + offset);
+        
+        // 确保字符串结束符并比较段名
+        char name[SECTION_NAME_LENGTH + 1];
+        memcpy(name, section->name, SECTION_NAME_LENGTH);
+        name[SECTION_NAME_LENGTH] = '\0';
+        
+        // 找到.bss段并清零
+        if (strcmp(name, ".bss") == 0) {
+            BOOT_DBG("Zeroing .bss section at 0x%08lX, size: %lu bytes", section->vma, section->size);
+            memset((void*)section->vma, 0, section->size);
+        }
+        
+        offset += sizeof(SectionInfo);
+    }
+    
+    // 重置offset指针，再次遍历段
+    offset = sizeof(MetadataHeader);
+    
+    // 然后复制其他需要的段
+    for (uint32_t i = 0; i < g_num_sections; i++) {
+        SectionInfo* section = (SectionInfo*)(g_metadata_buffer + offset);
+        
+        // 确保字符串结束符并比较段名
+        char name[SECTION_NAME_LENGTH + 1];
+        memcpy(name, section->name, SECTION_NAME_LENGTH);
+        name[SECTION_NAME_LENGTH] = '\0';
+        
+        // 检查是否是需要复制的段
+        if (strcmp(name, ".isr_vector") == 0 || 
+            strcmp(name, ".text") == 0 || 
+            strcmp(name, ".rodata") == 0 || 
+            strcmp(name, ".init_array") == 0 || 
+            strcmp(name, ".fini_array") == 0 || 
+            strcmp(name, ".data") == 0) {
+            
+            BOOT_DBG("Copying section %s from LMA:0x%08lX to VMA:0x%08lX, size: %lu bytes", 
+                    name, section->lma, section->vma, section->size);
+            
+            // 分配临时缓冲区来存储Flash数据
+            uint8_t* buffer = NULL;
+            uint32_t buffer_size = 0;
+            
+            // 确定合适的缓冲区大小，避免分配过大内存
+            if (section->size <= 4096) {
+                buffer_size = section->size;
+            } else {
+                buffer_size = 4096; // 使用4KB缓冲区分块复制
+            }
+            
+            buffer = (uint8_t*)malloc(buffer_size);
+            if (buffer == NULL) {
+                BOOT_ERR("Failed to allocate memory for section copy");
+                return;
+            }
+            
+            // 分块复制大段
+            uint32_t remaining = section->size;
+            uint32_t flash_offset = section->lma & 0x0FFFFFFF; // 去掉Flash基地址高位
+            uint32_t ram_offset = section->vma;
+            
+            while (remaining > 0) {
+                uint32_t chunk_size = (remaining > buffer_size) ? buffer_size : remaining;
+                
+                // 从Flash读取到缓冲区
+                QSPI_W25Qxx_ReadBuffer(buffer, flash_offset, chunk_size);
+                
+                // 复制到RAM
+                memcpy((void*)ram_offset, buffer, chunk_size);
+                
+                // 更新指针和剩余大小
+                flash_offset += chunk_size;
+                ram_offset += chunk_size;
+                remaining -= chunk_size;
+            }
+            
+            free(buffer);
+        }
+        
+        offset += sizeof(SectionInfo);
+    }
+    
+    BOOT_DBG("Application successfully copied to RAM");
+}
+
+/**
+  * @brief  This function is executed in case of error occurrence.
+  * @retval None
+  */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
 
 
 #ifdef  USE_FULL_ASSERT

@@ -54,15 +54,11 @@ int main(void)
     // board_init(); // 初始化板子 时钟 串口 WS2812B 等  
 
     USART1_Init(); // USART for debug
-
-    if(QSPI_W25Qxx_ExitMemoryMappedMode() != QSPI_W25Qxx_OK) {
-        APP_ERR("QSPI_W25Qxx_ExitMemoryMappedMode failed");
-    } else {
-        APP_DBG("QSPI_W25Qxx_ExitMemoryMappedMode success");
-    }
+    APP_DBG("Enter Application main!");
 
     uint8_t data[13] = "Hello, World!";
     uint8_t read_data[13];
+    QSPI_W25Qxx_Init();
     QSPI_W25Qxx_WriteBuffer(data, 0x00300000, 13);
     QSPI_W25Qxx_ReadBuffer(read_data, 0x00300000, 13);
     APP_DBG("read_data: %s", read_data);

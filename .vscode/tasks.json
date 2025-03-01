@@ -43,7 +43,15 @@
             "command": "make flash-bootloader",
             "group": "build",
             "problemMatcher": ["$gcc"],
-            "dependsOn": ["build-bootloader"]
+            "dependsOn": []
+        },
+        {
+            "label": "flash-metadata",
+            "type": "shell",
+            "command": "make flash-metadata",
+            "group": "build",
+            "problemMatcher": ["$gcc"],
+            "dependsOn": []
         },
         {
             "label": "flash-application",
@@ -51,7 +59,7 @@
             "command": "make flash-application",
             "group": "build",
             "problemMatcher": ["$gcc"],
-            "dependsOn": ["build-application"]
+            "dependsOn": []
         },
         {
             "label": "flash-web-resources",

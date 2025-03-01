@@ -70,27 +70,7 @@ copy_section:
 Reset_Handler:
     ldr   sp, =_estack      /* set stack pointer */
 
-    /* 先清零 BSS 段 */
-    ldr r2, =_sbss          /* BSS 段起始地址 */
-    ldr r4, =_ebss          /* BSS 段结束地址 */
-    movs r3, #0             /* 用于清零的值 */
-bss_loop:
-    cmp r2, r4              /* 比较当前地址和结束地址 */
-    itt lt                  /* if r2 < r4 */
-    strlt r3, [r2], #4      /* 写入0并递增地址 */
-    blt bss_loop            /* 继续循环 */
-
-    /* 拷贝数据段 */
-    ldr r0, =_sidata        /* Flash 中的源地址 */
-    ldr r1, =_sdata         /* RAM 中的目标地址 */
-    ldr r2, =_edata         /* 结束地址 */
-    bl  copy_section
-
-    /* 拷贝常量段 */
-    ldr r0, =_sirodata      /* Flash 中的源地址 */
-    ldr r1, =_srodata       /* RAM 中的目标地址 */
-    ldr r2, =_erodata       /* 结束地址 */
-    bl  copy_section
+  
 
     /********** 点亮LED start **********/
     /* 使能 GPIOC 时钟 */
@@ -165,57 +145,6 @@ bss_loop:
     dsb
     isb
 
-    /* 拷贝向量表 */
-    ldr r0, =_sivector      /* Flash 中的源地址 */
-    ldr r1, =g_pfnVectors   /* RAM 中的目标地址 */
-    ldr r2, =_evector       /* 结束地址 */
-    bl  copy_section
-
-    /* 重定位向量表 */
-    ldr r0, =g_pfnVectors   /* RAM 中的向量表地址 */
-    ldr r1, =0xE000ED08     /* SCB->VTOR 的地址 */
-    str r0, [r1]            /* 设置 VTOR  */
-
-
-    /* 拷贝代码段 */
-    ldr r0, =_sitext        /* Flash 中的源地址 */
-    ldr r1, =_stext         /* RAM 中的目标地址 */
-    ldr r2, =_etext         /* 结束地址 */
-    bl  copy_section
-
-    /* 拷贝 ARM.extab */
-    ldr r0, =__extab_start  /* Flash 中的源地址 */
-    ldr r1, =__extab_start  /* RAM 中的目标地址 */
-    ldr r2, =__extab_end    /* 结束地址 */
-    bl  copy_section
-
-    /* 拷贝 ARM.exidx */
-    ldr r0, =__exidx_start  /* Flash 中的源地址 */
-    ldr r1, =__exidx_start  /* RAM 中的目标地址 */
-    ldr r2, =__exidx_end    /* 结束地址 */
-    bl  copy_section
-
-    /* 拷贝 preinit_array */
-    ldr r0, =_sipreinit_array
-    ldr r1, =__preinit_array_start
-    ldr r2, =__preinit_array_end
-    bl  copy_section
-
-    /* 拷贝 init_array */
-    ldr r0, =_siinit_array
-    ldr r1, =__init_array_start
-    ldr r2, =__init_array_end
-    bl  copy_section
-
-    /* 拷贝 fini_array */
-    ldr r0, =_sifini_array
-    ldr r1, =__fini_array_start
-    ldr r2, =__fini_array_end
-    bl  copy_section
-
-     /* 内存屏障 */
-    dsb
-    isb
 
     /* 调用系统初始化 */
     bl  SystemInit

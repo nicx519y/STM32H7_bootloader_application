@@ -66,165 +66,6 @@ void USB_OTG_Host_Init(void)
 
 HCD_HandleTypeDef hhcd_USB_OTG_HS;
 
-void USB_FixInterrupts_TinyUSB(void)
-{
-  USB_HOST_DBG("Preparing USB OTG HS for TinyUSB...");
-  
-  // Disable and clear pending interrupt
-  HAL_NVIC_DisableIRQ(OTG_HS_IRQn);
-  HAL_NVIC_ClearPendingIRQ(OTG_HS_IRQn);
-  
-  // Set priority
-  HAL_NVIC_SetPriority(OTG_HS_IRQn, 2, 0);  // Use same priority as in MspInit
-  
-  // Get USB OTG HS base address
-  uint32_t usb_base = (uint32_t)USB_OTG_HS;
-  USB_HOST_DBG("  USB OTG HS Base: 0x%08lX", usb_base);
-  
-  // Reset the core (try a soft reset to fix mode issues)
-  USB_HOST_DBG("  Performing soft reset of USB controller");
-  volatile uint32_t* grstctl_reg = (volatile uint32_t*)(usb_base + 0x010); // GRSTCTL
-  *grstctl_reg = 0x00000001; // Set CSRST bit (Core Soft Reset)
-  
-  // Wait for reset to complete
-  uint32_t count = 0;
-  while ((*grstctl_reg & 0x00000001) && (count < 200000)) {
-    count++;
-  }
-  USB_HOST_DBG("  Soft reset %s", (count < 200000) ? "completed" : "timed out");
-  
-  // Wait for AHB to be idle
-  HAL_Delay(20);
-  
-  // Now set force host mode
-  volatile uint32_t* gusbcfg_reg = (volatile uint32_t*)(usb_base + 0x00C);
-  uint32_t gusbcfg_val = *gusbcfg_reg;
-  USB_HOST_DBG("  Original GUSBCFG: 0x%08lX", gusbcfg_val);
-  
-  // Clear all mode bits first, then set host mode only
-  gusbcfg_val &= ~(0x60000000);  // Clear both FDMOD and FHMOD
-  *gusbcfg_reg = gusbcfg_val;
-  HAL_Delay(50);  // Give time for changes to take effect
-  
-  gusbcfg_val = *gusbcfg_reg;
-  gusbcfg_val |= 0x20000000;    // Set FHMOD (Force Host Mode)
-  *gusbcfg_reg = gusbcfg_val;
-  
-  USB_HOST_DBG("  Updated GUSBCFG: 0x%08lX", *gusbcfg_reg);
-  HAL_Delay(100);  // Longer delay to ensure mode switch
-  
-  // Clear all interrupt flags
-  volatile uint32_t* gintsts_reg = (volatile uint32_t*)(usb_base + 0x014);
-  *gintsts_reg = 0xFFFFFFFF;
-  
-  // Enable USB OTG HS interrupt
-  HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
-  
-  USB_HOST_DBG("USB OTG HS prepared for TinyUSB");
-  
-  // TinyUSB will be initialized next
-}
-
-/**
-  * @brief  Diagnose USB OTG HS interrupt configuration and output status information
-  * @param  None
-  * @retval None
-  */
-void USB_DiagnoseInterruptConfig_TinyUSB(void)
-{
-  USB_HOST_DBG("\r\n===== USB OTG HS Interrupt Configuration Diagnosis =====");
-  
-  // Check NVIC interrupt configuration
-  uint32_t nvic_iser = NVIC->ISER[OTG_HS_IRQn >> 5];
-  uint32_t nvic_bit = 1 << (OTG_HS_IRQn & 0x1F);
-  uint8_t is_nvic_enabled = (nvic_iser & nvic_bit) ? 1 : 0;
-  
-  uint32_t nvic_priority = NVIC_GetPriority(OTG_HS_IRQn);
-  
-  USB_HOST_DBG("NVIC Configuration:");
-  USB_HOST_DBG("  OTG_HS_IRQn = %d", OTG_HS_IRQn);
-  USB_HOST_DBG("  Interrupt Enable Status: %s", is_nvic_enabled ? "Enabled" : "Disabled");
-  USB_HOST_DBG("  Priority: %lu", nvic_priority);
-  
-  // Get USB OTG HS base address
-  uint32_t usb_base = (uint32_t)USB_OTG_HS;
-  USB_HOST_DBG("USB OTG HS Base Address: 0x%08lX", usb_base);
-  
-  // Check USB clock configuration
-  uint32_t rcc_ahb1enr = RCC->AHB1ENR;
-  uint8_t is_usb_hs_clk_enabled = (rcc_ahb1enr & RCC_AHB1ENR_USB2OTGHSEN) ? 1 : 0;
-  uint8_t is_usb_hs_ulpi_clk_enabled = (rcc_ahb1enr & RCC_AHB1ENR_USB2OTGHSULPIEN) ? 1 : 0;
-  
-  USB_HOST_DBG("USB Clock Configuration:");
-  USB_HOST_DBG("  USB OTG HS Clock: %s", is_usb_hs_clk_enabled ? "Enabled" : "Disabled");
-  USB_HOST_DBG("  USB OTG HS ULPI Clock: %s", is_usb_hs_ulpi_clk_enabled ? "Enabled" : "Disabled");
-  
-  // Get values of key registers
-  volatile uint32_t gahbcfg = *(volatile uint32_t*)(usb_base + 0x008); // GAHBCFG
-  volatile uint32_t gintsts = *(volatile uint32_t*)(usb_base + 0x014); // GINTSTS
-  volatile uint32_t gintmsk = *(volatile uint32_t*)(usb_base + 0x018); // GINTMSK
-  volatile uint32_t hprt = *(volatile uint32_t*)(usb_base + 0x440);    // HPRT
-  volatile uint32_t gusbcfg = *(volatile uint32_t*)(usb_base + 0x00C); // GUSBCFG
-  volatile uint32_t gccfg = *(volatile uint32_t*)(usb_base + 0x038);   // GCCFG
-  
-  USB_HOST_DBG("USB Register Status:");
-  USB_HOST_DBG("  GAHBCFG = 0x%08lX", gahbcfg);
-  USB_HOST_DBG("    Global Interrupt Enable (GINT): %s", (gahbcfg & 0x00000001) ? "Enabled" : "Disabled");
-  
-  USB_HOST_DBG("  GUSBCFG = 0x%08lX", gusbcfg);
-  USB_HOST_DBG("    Force Host Mode (FHMOD): %s", (gusbcfg & 0x20000000) ? "Enabled" : "Disabled");
-  USB_HOST_DBG("    Force Device Mode (FDMOD): %s", (gusbcfg & 0x40000000) ? "Enabled" : "Disabled");
-  
-  USB_HOST_DBG("  GCCFG = 0x%08lX", gccfg);
-  USB_HOST_DBG("    Power Down (PWRDWN): %s", (gccfg & 0x00010000) ? "Enabled" : "Disabled");
-  
-  USB_HOST_DBG("  GINTSTS = 0x%08lX", gintsts);
-  USB_HOST_DBG("    Current Mode (CMOD): %s", (gintsts & 0x00000001) ? "Host" : "Device");
-  USB_HOST_DBG("    OTG Interrupt (OTGINT): %s", (gintsts & 0x00000004) ? "Active" : "Inactive");
-  USB_HOST_DBG("    SOF Interrupt (SOF): %s", (gintsts & 0x00000008) ? "Active" : "Inactive");
-  USB_HOST_DBG("    RxFIFO Non-Empty (RXFLVL): %s", (gintsts & 0x00000010) ? "Active" : "Inactive");
-  
-  USB_HOST_DBG("  GINTMSK = 0x%08lX", gintmsk);
-  USB_HOST_DBG("    OTG Interrupt Mask (OTGM): %s", (gintmsk & 0x00000004) ? "Enabled" : "Disabled");
-  USB_HOST_DBG("    SOF Interrupt Mask (SOFM): %s", (gintmsk & 0x00000008) ? "Enabled" : "Disabled");
-  USB_HOST_DBG("    RxFIFO Non-Empty Mask (RXFLVLM): %s", (gintmsk & 0x00000010) ? "Enabled" : "Disabled");
-  USB_HOST_DBG("    Host Channel Interrupt Mask (HCIM): %s", (gintmsk & 0x01000000) ? "Enabled" : "Disabled");
-  USB_HOST_DBG("    Port Interrupt Mask (PRTIM): %s", (gintmsk & 0x00000200) ? "Enabled" : "Disabled");
-  
-  USB_HOST_DBG("  HPRT = 0x%08lX", hprt);
-  USB_HOST_DBG("    Port Connect Status (PCSTS): %s", (hprt & 0x00000001) ? "Connected" : "Disconnected");
-  USB_HOST_DBG("    Port Enable (PENA): %s", (hprt & 0x00000004) ? "Enabled" : "Disabled");
-  USB_HOST_DBG("    Port Speed (PSPD): %s", 
-         ((hprt & 0x00000060) == 0x00000000) ? "High Speed" : 
-         ((hprt & 0x00000060) == 0x00000020) ? "Full Speed" : 
-         ((hprt & 0x00000060) == 0x00000040) ? "Low Speed" : "Unknown");
-  
-  // Check for pending interrupts
-  uint32_t pending_irq = (gintsts & gintmsk);
-  if (pending_irq) {
-    USB_HOST_DBG("  Pending Interrupts: 0x%08lX", pending_irq);
-    if (pending_irq & 0x00000004) USB_HOST_DBG("    OTG Interrupt Pending");
-    if (pending_irq & 0x00000008) USB_HOST_DBG("    SOF Interrupt Pending");
-    if (pending_irq & 0x00000010) USB_HOST_DBG("    RxFIFO Non-Empty Interrupt Pending");
-    if (pending_irq & 0x00000200) USB_HOST_DBG("    Port Interrupt Pending");
-    if (pending_irq & 0x01000000) USB_HOST_DBG("    Host Channel Interrupt Pending");
-  } else {
-    USB_HOST_DBG("  No Pending Interrupts");
-  }
-  
-  // Check if interrupt handler is correctly installed in vector table
-  uint32_t *vector_table = (uint32_t*)SCB->VTOR;
-  uint32_t installed_handler = vector_table[OTG_HS_IRQn + 16]; // +16 for core vectors
-  uint32_t expected_handler = (uint32_t)&OTG_HS_IRQHandler;
-  
-  USB_HOST_DBG("  Vector Table Base: 0x%08lX", (uint32_t)vector_table);
-  USB_HOST_DBG("  Installed Handler: 0x%08lX", installed_handler);
-  USB_HOST_DBG("  Expected Handler: 0x%08lX", expected_handler);
-  USB_HOST_DBG("  Handler Match: %s", (installed_handler == expected_handler) ? "Yes" : "No");
-  
-  USB_HOST_DBG("============ Diagnosis Complete ============\r\n");
-}
-
 /**
  * @brief 使用HAL库和直接寄存器操作的混合方式初始化USB OTG HS
  * @note 该函数将先使用HAL库初始化基本结构，然后通过直接寄存器操作修改关键设置
@@ -232,9 +73,6 @@ void USB_DiagnoseInterruptConfig_TinyUSB(void)
 void USB_InitForTinyUSB_Complete(void)
 {
   USB_HOST_DBG("\r\n========== USB OTG HS Mixed Initialization Method ==========");
-  
-  // Step 1: First use HAL library to initialize the basic structure
-  USB_HOST_DBG("1. Using HAL library for basic initialization...");
   
   // Create a temporary HAL handle for initialization
   HCD_HandleTypeDef hhcd_temp = {0};
@@ -249,42 +87,22 @@ void USB_InitForTinyUSB_Complete(void)
   
   // Call HAL library initialization
   HAL_HCD_Init(&hhcd_temp);
-  USB_HOST_DBG("  HAL library initialization completed");
   
-  // Step 2: Disable HAL interrupt handler, we will use our own interrupt handler
-  USB_HOST_DBG("2. Configuring interrupt handling...");
   HAL_NVIC_DisableIRQ(OTG_HS_IRQn);
   HAL_NVIC_ClearPendingIRQ(OTG_HS_IRQn);
   HAL_NVIC_SetPriority(OTG_HS_IRQn, 2, 0);
-  USB_HOST_DBG("  ✓ Interrupt configuration completed");
   
-  // Step 3: Read current register status
-  USB_HOST_DBG("3. Current register status:");
-  USB_HOST_DBG("  GUSBCFG: 0x%08lX", USB_OTG_HS->GUSBCFG);
-  USB_HOST_DBG("  GINTMSK: 0x%08lX", USB_OTG_HS->GINTMSK);
-  USB_HOST_DBG("  GAHBCFG: 0x%08lX", USB_OTG_HS->GAHBCFG);
-  USB_HOST_DBG("  HPRT: 0x%08lX", *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440));
-  
-  // Step 4: Force host mode using HAL library
-  USB_HOST_DBG("4. Forcing host mode...");
   USB_OTG_HS->GUSBCFG &= ~(USB_OTG_GUSBCFG_FDMOD);
   USB_OTG_HS->GUSBCFG |= USB_OTG_GUSBCFG_FHMOD;
   
   // Wait for mode switch to complete
   HAL_Delay(100);
-  USB_HOST_DBG("  Current GUSBCFG: 0x%08lX", USB_OTG_HS->GUSBCFG);
-  
-  // Step 5: Ensure port power is turned on
-  USB_HOST_DBG("5. Configuring port power...");
+
   uint32_t hprt = *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440);
   uint32_t new_hprt = hprt & ~(0x0000002E); // Clear W1C bits
   new_hprt |= 0x00001000; // Set port power bit
   *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440) = new_hprt;
-  USB_HOST_DBG("  Current HPRT: 0x%08lX", *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440));
-  
-  // Step 6: Configure interrupt mask - reuse HAL's configuration
-  USB_HOST_DBG("6. Checking interrupt mask...");
-  
+
   // Ensure port interrupt and disconnect interrupt are enabled
   if ((USB_OTG_HS->GINTMSK & USB_OTG_GINTMSK_PRTIM) == 0 ||
       (USB_OTG_HS->GINTMSK & USB_OTG_GINTMSK_DISCINT) == 0) {
@@ -298,12 +116,7 @@ void USB_InitForTinyUSB_Complete(void)
     USB_OTG_HS->GINTMSK = current_mask;
   }
   
-  USB_HOST_DBG("  Current GINTMSK: 0x%08lX", USB_OTG_HS->GINTMSK);
-  
-  // Step 7: Ensure global interrupt is enabled
-  USB_HOST_DBG("7. Ensuring global interrupt enable...");
   USB_OTG_HS->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
-  USB_HOST_DBG("  Current GAHBCFG: 0x%08lX", USB_OTG_HS->GAHBCFG);
   
   // Step 8: Clear any pending interrupts
   USB_OTG_HS->GINTSTS = 0xFFFFFFFF;
@@ -311,18 +124,6 @@ void USB_InitForTinyUSB_Complete(void)
   // Enable NVIC interrupt
   HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
   
-  // Step 9: Final check
-  USB_HOST_DBG("8. Final register status:");
-  USB_HOST_DBG("  GUSBCFG: 0x%08lX", USB_OTG_HS->GUSBCFG);
-  USB_HOST_DBG("  GINTMSK: 0x%08lX", USB_OTG_HS->GINTMSK);
-  USB_HOST_DBG("  GAHBCFG: 0x%08lX", USB_OTG_HS->GAHBCFG);
-  USB_HOST_DBG("  HPRT: 0x%08lX", *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440));
-  
-  USB_HOST_DBG("USB OTG HS initialization completed, ready for TinyUSB initialization");
-  USB_HOST_DBG("\r\nImportant Notes:");
-  USB_HOST_DBG("1. Next call tusb_init()");
-  USB_HOST_DBG("2. Then call tuh_task() in the main loop");
-  USB_HOST_DBG("========== Initialization Complete ==========\r\n");
 }
 
 /**

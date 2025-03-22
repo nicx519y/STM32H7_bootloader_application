@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "device/usbd.h"
+#include "host/usbh.h"
 #include "board_cfg.h"
 /* USER CODE END Includes */
 
@@ -306,11 +307,12 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
   */
 void OTG_HS_IRQHandler(void)
 {
-  APP_DBG("OTG_HS_IRQHandler");
+  // APP_DBG("OTG_HS_IRQHandler");
 
-  HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
+  // HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
   
-  APP_DBG("OTG_HS_IRQHandler process done");
+  // APP_DBG("OTG_HS_IRQHandler process done");
+  tuh_int_handler(1, true); // 1 对应 RHPORT1 (OTG_HS)
 }
 
 /**

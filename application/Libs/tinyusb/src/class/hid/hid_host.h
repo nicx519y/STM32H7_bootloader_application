@@ -28,6 +28,7 @@
 #define _TUSB_HID_HOST_H_
 
 #include "hid.h"
+#include "usbh.h"
 
 #ifdef __cplusplus
 extern "C" {

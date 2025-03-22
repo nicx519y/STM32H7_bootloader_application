@@ -50,6 +50,7 @@ Drivers/PWM-WS2812B \
 Drivers/GPIO-BTN \
 Libs/tinyusb/src \
 Libs/tinyusb/src/device \
+Libs/tinyusb/src/host \
 Libs/tinyusb/src/common \
 Libs/tinyusb/lib/networking \
 Libs/tinyusb/src/portable/synopsys/dwc2 \
@@ -61,7 +62,6 @@ Libs/stm32_mw_lwip/src/core \
 Libs/stm32_mw_lwip/src/netif \
 Libs/stm32_mw_lwip/src/core/ipv4 \
 Libs/cJSON 
-# Libs/tinyusb/src/host \
 
 
 # C++ 源文件目录
@@ -76,6 +76,7 @@ Cpp_Core/Src/states \
 Cpp_Core/Src/adc_btns \
 Cpp_Core/Src/gpio_btns \
 Cpp_Core/Src/leds \
+CPP_Core/Src/usbhost_manager \
 Libs/CRC32/src \
 Libs/httpd
 
@@ -115,6 +116,7 @@ C_INCLUDES += \
 -ICpp_Core/Inc/leds \
 -ICpp_Core/Inc/enums \
 -ICpp_Core/Inc/constants \
+-ICpp_Core/Inc/usbhost_manager \
 -IDrivers \
 -IDrivers/QSPI-W25Q64 \
 -IDrivers/USART \
@@ -127,11 +129,13 @@ C_INCLUDES += \
 -ILibs/tinyusb/hw \
 -ILibs/tinyusb/src \
 -ILibs/tinyusb/src/device \
+-ILibs/tinyusb/src/host \
 -ILibs/tinyusb/src/common \
 -ILibs/tinyusb/lib/networking \
 -ILibs/tinyusb/src/portable/synopsys/dwc2 \
 -ILibs/tinyusb/src/portable/st/stm32_fsdev \
 -ILibs/tinyusb/src/class/net \
+-ILibs/tinyusb/src/class/hid \
 -ILibs/rndis \
 -ILibs/stm32_mw_lwip/src/apps \
 -ILibs/stm32_mw_lwip/src/core \
@@ -141,7 +145,6 @@ C_INCLUDES += \
 -ILibs/stm32_mw_lwip/system \
 -ILibs/lwip-port \
 -ILibs/cJSON 
-# -ILibs/tinyusb/src/host \
 
 
 # C++ 编译器设置

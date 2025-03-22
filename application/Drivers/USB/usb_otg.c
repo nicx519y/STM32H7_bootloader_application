@@ -67,66 +67,6 @@ void USB_OTG_Host_Init(void)
 HCD_HandleTypeDef hhcd_USB_OTG_HS;
 
 /**
- * @brief 使用HAL库和直接寄存器操作的混合方式初始化USB OTG HS
- * @note 该函数将先使用HAL库初始化基本结构，然后通过直接寄存器操作修改关键设置
- */
-void USB_InitForTinyUSB_Complete(void)
-{
-  USB_HOST_DBG("\r\n========== USB OTG HS Mixed Initialization Method ==========");
-  
-  // Create a temporary HAL handle for initialization
-  HCD_HandleTypeDef hhcd_temp = {0};
-  hhcd_temp.Instance = USB_OTG_HS;
-  hhcd_temp.Init.Host_channels = 16;
-  hhcd_temp.Init.speed = HCD_SPEED_FULL;
-  hhcd_temp.Init.dma_enable = DISABLE;
-  hhcd_temp.Init.phy_itface = USB_OTG_EMBEDDED_PHY;
-  hhcd_temp.Init.Sof_enable = DISABLE;
-  hhcd_temp.Init.low_power_enable = DISABLE;
-  hhcd_temp.Init.use_external_vbus = DISABLE;
-  
-  // Call HAL library initialization
-  HAL_HCD_Init(&hhcd_temp);
-  
-  HAL_NVIC_DisableIRQ(OTG_HS_IRQn);
-  HAL_NVIC_ClearPendingIRQ(OTG_HS_IRQn);
-  HAL_NVIC_SetPriority(OTG_HS_IRQn, 2, 0);
-  
-  USB_OTG_HS->GUSBCFG &= ~(USB_OTG_GUSBCFG_FDMOD);
-  USB_OTG_HS->GUSBCFG |= USB_OTG_GUSBCFG_FHMOD;
-  
-  // Wait for mode switch to complete
-  HAL_Delay(100);
-
-  uint32_t hprt = *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440);
-  uint32_t new_hprt = hprt & ~(0x0000002E); // Clear W1C bits
-  new_hprt |= 0x00001000; // Set port power bit
-  *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440) = new_hprt;
-
-  // Ensure port interrupt and disconnect interrupt are enabled
-  if ((USB_OTG_HS->GINTMSK & USB_OTG_GINTMSK_PRTIM) == 0 ||
-      (USB_OTG_HS->GINTMSK & USB_OTG_GINTMSK_DISCINT) == 0) {
-    
-    USB_HOST_DBG("  Updating interrupt mask");
-    // Save current mask, add critical interrupts
-    uint32_t current_mask = USB_OTG_HS->GINTMSK;
-    current_mask |= USB_OTG_GINTMSK_PRTIM;   // Port interrupt
-    current_mask |= USB_OTG_GINTMSK_DISCINT; // Disconnect interrupt
-    current_mask |= (1 << 24);               // Host channel interrupt (HCIM)
-    USB_OTG_HS->GINTMSK = current_mask;
-  }
-  
-  USB_OTG_HS->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
-  
-  // Step 8: Clear any pending interrupts
-  USB_OTG_HS->GINTSTS = 0xFFFFFFFF;
-  
-  // Enable NVIC interrupt
-  HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
-  
-}
-
-/**
  * @brief Enhanced OTG_HS_IRQHandler that provides more debug information
  * @note This function should be called from the original IRQHandler
  */

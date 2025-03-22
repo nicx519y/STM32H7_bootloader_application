@@ -76,7 +76,7 @@ void InputState::setup() {
     
     // 初始化TinyUSB主机栈
     APP_DBG("tuh_init start");
-    USB_InitForTinyUSB_Complete();
+    // USB_InitForTinyUSB_Complete();
     tuh_init(TUH_OPT_RHPORT);
     
     APP_DBG("tuh_init done, USB Host mode activated on port: %d", TUH_OPT_RHPORT);

@@ -92,27 +92,105 @@ bool hcd_init(uint8_t rhport) {
   dwc2_controller_t* controller = get_controller(rhport);
   if (!controller) return false;
   
-  // STM32 HAL库已经完成了大部分初始化，我们只需补充一些关键设置
+  USB_OTG_GlobalTypeDef* USBx = controller->global_base;
   
-  // 确保全局中断使能
-  controller->global_base->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
+  USB_HOST_DBG("\r\n========== USB OTG HS Mixed Initialization Method ==========");
   
-  // 强制主机模式
-  controller->global_base->GUSBCFG |= USB_OTG_GUSBCFG_FHMOD;
-  controller->global_base->GUSBCFG &= ~USB_OTG_GUSBCFG_FDMOD;
+  // Step 1: 使用HAL库进行基本初始化
+  USB_HOST_DBG("1. Using HAL library for basic initialization...");
   
-  // 设置中断掩码：至少需要端口中断和断开连接中断
-  controller->global_base->GINTMSK |= USB_OTG_GINTMSK_PRTIM | USB_OTG_GINTMSK_DISCINT;
+  HCD_HandleTypeDef hhcd_temp = {0};
+  hhcd_temp.Instance = USB_OTG_HS;
+  hhcd_temp.Init.Host_channels = 16;
+  hhcd_temp.Init.speed = HCD_SPEED_FULL;
+  hhcd_temp.Init.dma_enable = DISABLE;
+  hhcd_temp.Init.phy_itface = USB_OTG_EMBEDDED_PHY;
+  hhcd_temp.Init.Sof_enable = DISABLE;
+  hhcd_temp.Init.low_power_enable = DISABLE;
+  hhcd_temp.Init.use_external_vbus = DISABLE;
   
-  // 启用端口电源
-  uint32_t hprt = *(__IO uint32_t*)controller->hprt_base;
-  uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
-  new_hprt |= USB_OTG_HPRT_PPWR;
-  *(__IO uint32_t*)controller->hprt_base = new_hprt;
+  if (HAL_HCD_Init(&hhcd_temp) != HAL_OK) {
+    return false;
+  }
+  USB_HOST_DBG("  HAL HCD initialization completed");
   
-  // 初始设置为未连接状态
+  // Step 2: 禁用HAL中断处理程序，我们将使用自己的中断处理程序
+  USB_HOST_DBG("2. Configuring interrupt handling...");
+  HAL_NVIC_DisableIRQ(OTG_HS_IRQn);
+  HAL_NVIC_ClearPendingIRQ(OTG_HS_IRQn);
+  HAL_NVIC_SetPriority(OTG_HS_IRQn, 2, 0);
+  USB_HOST_DBG("  Interrupt configuration completed");
+  
+  // Step 3: 显示当前寄存器状态
+  USB_HOST_DBG("3. Current register status:");
+  USB_HOST_DBG("  GUSBCFG: 0x%08lX", USBx->GUSBCFG);
+  USB_HOST_DBG("  GINTMSK: 0x%08lX", USBx->GINTMSK);
+  USB_HOST_DBG("  GAHBCFG: 0x%08lX", USBx->GAHBCFG);
+  USB_HOST_DBG("  HPRT: 0x%08lX", *(__IO uint32_t *)((uint32_t)USBx + 0x440));
+  
+  // Step 4: 强制主机模式
+  USB_HOST_DBG("4. Forcing host mode...");
+  USBx->GUSBCFG &= ~(USB_OTG_GUSBCFG_FDMOD);
+  USBx->GUSBCFG |= USB_OTG_GUSBCFG_FHMOD;
+  
+  // 等待模式切换完成
+  HAL_Delay(100);
+  USB_HOST_DBG("  Current GUSBCFG: 0x%08lX", USBx->GUSBCFG);
+  
+  // Step 5: 确保端口电源开启
+  USB_HOST_DBG("5. Configuring port power...");
+  uint32_t hprt = *(__IO uint32_t *)((uint32_t)USBx + 0x440);
+  uint32_t new_hprt = hprt & ~(0x0000002E); // 清除W1C位
+  new_hprt |= 0x00001000; // 设置端口电源位
+  *(__IO uint32_t *)((uint32_t)USBx + 0x440) = new_hprt;
+  USB_HOST_DBG("  Current HPRT: 0x%08lX", *(__IO uint32_t *)((uint32_t)USBx + 0x440));
+  
+  // Step 6: 配置中断掩码
+  USB_HOST_DBG("6. Checking interrupt mask...");
+  
+  // 确保端口中断和断开连接中断已启用
+  if ((USBx->GINTMSK & USB_OTG_GINTMSK_PRTIM) == 0 ||
+      (USBx->GINTMSK & USB_OTG_GINTMSK_DISCINT) == 0) {
+    
+    USB_HOST_DBG("  Updating interrupt mask");
+    // 保存当前掩码，添加关键中断
+    uint32_t current_mask = USBx->GINTMSK;
+    current_mask |= USB_OTG_GINTMSK_PRTIM;   // 端口中断
+    current_mask |= USB_OTG_GINTMSK_DISCINT; // 断开连接中断
+    current_mask |= (1 << 24);               // 主机通道中断 (HCIM)
+    USBx->GINTMSK = current_mask;
+  }
+  
+  USB_HOST_DBG("  Current GINTMSK: 0x%08lX", USBx->GINTMSK);
+  
+  // Step 7: 确保全局中断已启用
+  USB_HOST_DBG("7. Ensuring global interrupt enable...");
+  USBx->GAHBCFG |= USB_OTG_GAHBCFG_GINT;
+  USB_HOST_DBG("  Current GAHBCFG: 0x%08lX", USBx->GAHBCFG);
+  
+  // Step 8: 清除所有挂起的中断
+  USBx->GINTSTS = 0xFFFFFFFF;
+  
+  // 启用NVIC中断
+  HAL_NVIC_EnableIRQ(OTG_HS_IRQn);
+  
+  // Step 9: 最终检查
+  USB_HOST_DBG("8. Final register status:");
+  USB_HOST_DBG("  GUSBCFG: 0x%08lX", USBx->GUSBCFG);
+  USB_HOST_DBG("  GINTMSK: 0x%08lX", USBx->GINTMSK);
+  USB_HOST_DBG("  GAHBCFG: 0x%08lX", USBx->GAHBCFG);
+  USB_HOST_DBG("  HPRT: 0x%08lX", *(__IO uint32_t *)((uint32_t)USBx + 0x440));
+  
+  // 初始化控制器状态
   controller->connected = false;
   controller->port_enabled = false;
+  controller->speed = TUSB_SPEED_FULL;
+  
+  USB_HOST_DBG("USB OTG HS initialization completed, ready for TinyUSB initialization");
+  USB_HOST_DBG("\r\nImportant Notes:");
+  USB_HOST_DBG("1. Next call tusb_init()");
+  USB_HOST_DBG("2. Then call tuh_task() in the main loop");
+  USB_HOST_DBG("========== Initialization Complete ==========\r\n");
   
   return true;
 }

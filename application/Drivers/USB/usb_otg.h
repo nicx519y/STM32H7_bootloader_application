@@ -49,7 +49,6 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 
 
 void USB_OTG_Host_Init(void);
-void USB_InitForTinyUSB_Complete(void);
 void USB_HS_EnhancedIRQHandler(void);
 void USB_HS_MonitorTinyUSB(void);
 

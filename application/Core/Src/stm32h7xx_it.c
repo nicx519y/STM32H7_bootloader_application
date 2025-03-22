@@ -25,6 +25,7 @@
 #include "device/usbd.h"
 #include "host/usbh.h"
 #include "board_cfg.h"
+#include "usb_otg.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,6 +68,8 @@ extern TIM_HandleTypeDef htim2;
 /* USER CODE BEGIN EV */
 
 /* USER CODE END EV */
+
+extern void USB_HS_EnhancedIRQHandler(void);
 
 /******************************************************************************/
 /*           Cortex Processor Interruption and Exception Handlers          */
@@ -307,12 +310,14 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
   */
 void OTG_HS_IRQHandler(void)
 {
-  // APP_DBG("OTG_HS_IRQHandler");
-
-  // HAL_HCD_IRQHandler(&hhcd_USB_OTG_HS);
+  // 记录中断处理器进入时间
+  uint32_t enter_time = HAL_GetTick();
   
-  // APP_DBG("OTG_HS_IRQHandler process done");
-  tuh_int_handler(1, true); // 1 对应 RHPORT1 (OTG_HS)
+  // 调用增强的IRQ处理器，它包含详细的诊断信息
+  USB_HS_EnhancedIRQHandler();
+  
+  // 显示中断处理用时（仅用于调试）
+  USB_HOST_DBG("process time: %lu ms", HAL_GetTick() - enter_time);
 }
 
 /**

@@ -55,6 +55,8 @@ extern "C"
 #define TUH_OPT_RHPORT BOARD_TUH_RHPORT        // TinyUSB主机栈使用的端口号
 #define BOARD_TUH_MAX_SPEED OPT_MODE_FULL_SPEED  // 主机模式的最大速度为全速(12Mbps)
 
+#define CFG_TUSB_RHPORT1_MODE   (OPT_MODE_HOST | OPT_MODE_HIGH_SPEED)
+
 //--------------------------------------------------------------------
 // Common Configuration
 //--------------------------------------------------------------------
@@ -104,7 +106,9 @@ extern "C"
 //--------------------------------------------------------------------
 
 // Size of buffer to hold descriptors and other data used for enumeration
-#define CFG_TUH_ENUMERATION_BUFSIZE 256        // 枚举缓冲区大小，用于存储设备描述符等
+#define CFG_TUH_ENUMERATION_BUFSIZE     256        // 枚举缓冲区大小，用于存储设备描述符等
+#define CFG_TUH_ENDPOINT_MAX            16
+#define CFG_TUH_DEVICE_MAX              4
 
 #define CFG_TUH_HUB                 1          // 启用USB集线器支持
 #define CFG_TUH_DEVICE_MAX          (CFG_TUH_HUB ? 4 : 1) // 最大设备数量，启用集线器时为4，否则为1

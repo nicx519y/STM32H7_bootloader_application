@@ -21,6 +21,8 @@
 #ifndef __USB_OTG_H__
 #define __USB_OTG_H__
 
+
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -29,7 +31,14 @@ extern "C" {
 #include "main.h"
 
 /* USER CODE BEGIN Includes */
-
+#define USB_HOST_Debug  1
+#if USB_HOST_Debug
+  #define USB_HOST_DBG(fmt, ...) printf("[USB_HOST] " fmt "\r\n", ##__VA_ARGS__)
+  #define USB_HOST_ERR(fmt, ...) printf("[USB_HOST] Err: " fmt "\r\n", ##__VA_ARGS__)
+#else
+  #define USB_HOST_DBG(fmt, ...) ((void)0)
+  #define USB_HOST_ERR(fmt, ...) ((void)0)
+#endif
 /* USER CODE END Includes */
 
 extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
@@ -38,9 +47,11 @@ extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 
 /* USER CODE END Private defines */
 
-void MX_USB_OTG_HS_HCD_Init(void);
-void USB_DiagnoseInterruptConfig(void);
-void USB_FixInterrupts(void);
+
+void USB_OTG_Host_Init(void);
+void USB_InitForTinyUSB_Complete(void);
+void USB_HS_EnhancedIRQHandler(void);
+void USB_HS_MonitorTinyUSB(void);
 
 /* USER CODE BEGIN Prototypes */
 

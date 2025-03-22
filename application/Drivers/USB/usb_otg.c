@@ -88,46 +88,49 @@ void USB_HS_EnhancedIRQHandler(void)
   USB_HOST_DBG("USB IRQ: GINTSTS=0x%08lX, pending=0x%08lX, HPRT=0x%08lX", 
           gintsts, pending, hprt);
   
-  // 检查端口连接状态 (PCSTS位)
+  // 检查端口连接状态和状态位，但不修改任何状态
   bool port_connected = (hprt & USB_OTG_HPRT_PCSTS) != 0;
+  bool connection_detected = (hprt & USB_OTG_HPRT_PCDET) != 0;
+  bool enable_changed = (hprt & USB_OTG_HPRT_PENCHNG) != 0;
+  bool port_enabled = (hprt & USB_OTG_HPRT_PENA) != 0;
   
-  // 如果发现端口连接且之前未处理过
-  if (port_connected && !connection_handled) {
+  // 仅用于日志记录 - 不修改任何寄存器
+  if (port_connected && connection_detected && !connection_handled) {
     USB_HOST_DBG("USB device connection detected! Starting enumeration... (detection #%lu)", ++connection_count);
-    
-    // 记录端口状态变化前的数据
     USB_HOST_DBG("  Connection status before: HPRT=0x%08lX", hprt);
     
-    // 清除任何连接状态位
-    uint32_t new_hprt = hprt;
-    // 清除W1C位(写1清除)，避免意外清除
-    new_hprt &= ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | 
-                 USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
-    // 设置PCDET位来确认已检测到连接
-    new_hprt |= USB_OTG_HPRT_PCDET;
+    // 解析速度位
+    uint32_t speed_bits = (hprt & USB_OTG_HPRT_PSPD) >> USB_OTG_HPRT_PSPD_Pos;
+    USB_HOST_DBG("  Port speed: %s", 
+               speed_bits == 0 ? "High Speed" : 
+               speed_bits == 1 ? "Full Speed" : 
+               speed_bits == 2 ? "Low Speed" : "Unknown");
     
-    // 写入HPRT寄存器
-    *hprt_reg = new_hprt;
-    USB_HOST_DBG("  After status bits cleared: HPRT=0x%08lX", *hprt_reg);
-    
-    // 标记连接已处理
+    // 标记连接已处理 (仅用于日志)
     connection_handled = true;
   }
   
-  // 检查连接断开
+  // 检查连接断开 (仅用于日志)
   if (!port_connected && connection_handled) {
     USB_HOST_DBG("USB device disconnected");
     connection_handled = false; // 重置连接状态标志
   }
   
-  
+  // 输出更多的寄存器状态
+  if (enable_changed) {
+    USB_HOST_DBG("  Port enable changed: %s", port_enabled ? "ENABLED" : "DISABLED");
+  }
   
   // 调用TinyUSB的中断处理函数
-  // 对于STM32H7 OTG_HS，TinyUSB使用端口号1
   extern void tuh_int_handler(uint8_t rhport, bool in_isr);
   USB_HOST_DBG("  Calling TinyUSB handler...");
   tuh_int_handler(1, true);
-
+  
+  // 检查HPRT的变化
+  uint32_t hprt_after = *hprt_reg;
+  if (hprt != hprt_after) {
+    USB_HOST_DBG("  HPRT changed after interrupt: 0x%08lX -> 0x%08lX", hprt, hprt_after);
+  }
   
   USB_HOST_DBG("  Interrupt processing complete");
 }

@@ -9,8 +9,6 @@
 #include "tusb.h" // 包含TinyUSB头文件
 
 
-// 定义主机模式使用的端口，STM32H750的OTG_HS对应RHPORT1
-#define HOST_RHPORT      1
 
 // USB主机设备连接状态
 bool usb_host_device_connected = false;
@@ -74,8 +72,8 @@ void InputState::setup() {
     
     // 初始化TinyUSB主机栈
     APP_DBG("tuh_init start");
-    tuh_init(HOST_RHPORT);
-    APP_DBG("tuh_init done, USB Host mode activated on port: %d", HOST_RHPORT);
+    tuh_init(TUH_OPT_RHPORT);
+    APP_DBG("tuh_init done, USB Host mode activated on port: %d", TUH_OPT_RHPORT);
     
     // 启动USB主机端口供电
     APP_DBG("Starting USB Host port power...");
@@ -88,10 +86,10 @@ void InputState::setup() {
         
         // 可选：强制开启VBUS (如果硬件支持)
         uint32_t hprt = *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440);
-        if ((hprt & 0x00001000) == 0) { // 检查PPWR位
+        if ((hprt & USB_OTG_HPRT_PPWR) == 0) { // 检查PPWR位
             // 端口电源未开启，尝试手动开启
-            uint32_t new_hprt = hprt & ~(0x00000004U | 0x00000008U | 0x00000010U);
-            new_hprt |= 0x00001000; // 设置PPWR位
+            uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCA);
+            new_hprt |= USB_OTG_HPRT_PPWR; // 设置PPWR位
             *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440) = new_hprt;
             APP_DBG("USB Host port power enabled manually");
         }
@@ -150,7 +148,7 @@ void InputState::loop() {
         
         // 检查USB主机控制器状态
         uint32_t hprt = *(__IO uint32_t *)((uint32_t)USB_OTG_HS + 0x440);
-        bool port_connected = (hprt & 0x00000001) != 0; // PCSTS位
+        bool port_connected = (hprt & USB_OTG_HPRT_PCSTS_Msk) != 0; // PCSTS位
         
         if (port_connected && !usb_host_device_connected) {
             APP_DBG("USB Host端口有连接但TinyUSB未识别到设备，HPRT=0x%08lX", hprt);

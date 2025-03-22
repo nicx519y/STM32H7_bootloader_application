@@ -112,12 +112,6 @@ void USB_HS_EnhancedIRQHandler(void)
     
     // 标记连接已处理
     connection_handled = true;
-    
-    // 记录更多诊断信息，帮助理解问题
-    USB_HOST_DBG("  Port speed: %s", 
-           ((hprt & 0x00000060) == 0x00000000) ? "High Speed" : 
-           ((hprt & 0x00000060) == 0x00000020) ? "Full Speed" : 
-           ((hprt & 0x00000060) == 0x00000040) ? "Low Speed" : "Unknown");
   }
   
   // 检查连接断开
@@ -126,66 +120,14 @@ void USB_HS_EnhancedIRQHandler(void)
     connection_handled = false; // 重置连接状态标志
   }
   
-  // 处理特定的中断
-  if (pending != 0) {
-    // 只在中断状态变化时详细打印，以减少日志
-    if (pending != last_gintsts) {
-      USB_HOST_DBG("  Interrupt status changed:");
-      last_gintsts = pending;
-      
-      // 检查端口中断
-      if (pending & USB_OTG_GINTSTS_HPRTINT) { // 位9：端口中断
-        USB_HOST_DBG("  * Port interrupt: HPRT=0x%08lX", hprt);
-        
-        // 检查特定端口状态
-        if (hprt & USB_OTG_HPRT_PCDET) {
-          USB_HOST_DBG("    - Port connection detected (PCDET)");
-        }
-        
-        if (hprt & USB_OTG_HPRT_PENCHNG) {
-          USB_HOST_DBG("    - Port enable changed (PENCHNG): %s", 
-                 (hprt & USB_OTG_HPRT_PENA) ? "Enabled" : "Disabled");
-        }
-        
-        if (hprt & USB_OTG_HPRT_POCCHNG) {
-          USB_HOST_DBG("    - Port overcurrent changed (POCCHNG)");
-        }
-      }
-      
-      if (pending & USB_OTG_GINTSTS_DISCINT) {
-        USB_HOST_DBG("  * Device disconnect interrupt (DISCINT)");
-      }
-      
-      if (pending & USB_OTG_GINTSTS_SRQINT) {
-        USB_HOST_DBG("  * Session request interrupt (SRQINT)");
-      }
-      
-      if (pending & USB_OTG_GINTSTS_RXFLVL) {
-        USB_HOST_DBG("  * RxFIFO non-empty interrupt (RXFLVL)");
-      }
-      
-      if (pending & USB_OTG_GINTSTS_HCINT) {
-        USB_HOST_DBG("  * Host channel interrupt (HCINT)");
-        // 输出每个主机通道的状态
-        // HAINT寄存器在STM32H7的USB_OTG_HS中需要通过偏移量访问
-        volatile uint32_t* haint_reg = (volatile uint32_t*)((uint32_t)USB_OTG_HS + 0x414); // HAINT偏移量为0x414
-        uint32_t haint = *haint_reg;
-        USB_HOST_DBG("    HAINT=0x%08lX", haint);
-      }
-    }
-  }
+  
   
   // 调用TinyUSB的中断处理函数
   // 对于STM32H7 OTG_HS，TinyUSB使用端口号1
   extern void tuh_int_handler(uint8_t rhport, bool in_isr);
   USB_HOST_DBG("  Calling TinyUSB handler...");
   tuh_int_handler(1, true);
-  
-  // 中断后再次检查关键状态
-  uint32_t post_hprt = *hprt_reg;
-  if (post_hprt != hprt) {
-    USB_HOST_DBG("  HPRT changed after interrupt: 0x%08lX -> 0x%08lX", hprt, post_hprt);
-  }
+
   
   USB_HOST_DBG("  Interrupt processing complete");
 }

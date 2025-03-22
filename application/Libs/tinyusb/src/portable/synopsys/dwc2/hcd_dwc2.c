@@ -206,62 +206,62 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   uint32_t gintsts = USBx->GINTSTS & USBx->GINTMSK;
   
   // 处理端口中断
-  if (gintsts & USB_OTG_GINTSTS_HPRTINT) {
-    uint32_t hprt = *(__IO uint32_t*)controller->hprt_base;
+  // if (gintsts & USB_OTG_GINTSTS_HPRTINT) {
+  //   uint32_t hprt = *(__IO uint32_t*)controller->hprt_base;
     
-    // 检查端口连接状态变化
-    if (hprt & USB_OTG_HPRT_PCDET) {
-      bool connected = (hprt & USB_OTG_HPRT_PCSTS) ? true : false;
+  //   // 检查端口连接状态变化
+  //   if (hprt & USB_OTG_HPRT_PCDET) {
+  //     bool connected = (hprt & USB_OTG_HPRT_PCSTS) ? true : false;
       
-      // 清除连接检测标志位
-      uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
-      new_hprt |= USB_OTG_HPRT_PCDET;
-      *(__IO uint32_t*)controller->hprt_base = new_hprt;
+  //     // 清除连接检测标志位
+  //     uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
+  //     new_hprt |= USB_OTG_HPRT_PCDET;
+  //     *(__IO uint32_t*)controller->hprt_base = new_hprt;
       
-      if (connected != controller->connected) {
-        controller->connected = connected;
+  //     if (connected != controller->connected) {
+  //       controller->connected = connected;
         
-        if (connected) {
-          // 检测设备速度
-          uint32_t speed_bits = (hprt & USB_OTG_HPRT_PSPD) >> USB_OTG_HPRT_PSPD_Pos;
-          switch (speed_bits) {
-            case 0: controller->speed = TUSB_SPEED_HIGH; break;
-            case 1: controller->speed = TUSB_SPEED_FULL; break;
-            case 2: controller->speed = TUSB_SPEED_LOW; break;
-            default: controller->speed = TUSB_SPEED_FULL; break;
-          }
+  //       if (connected) {
+  //         // 检测设备速度
+  //         uint32_t speed_bits = (hprt & USB_OTG_HPRT_PSPD) >> USB_OTG_HPRT_PSPD_Pos;
+  //         switch (speed_bits) {
+  //           case 0: controller->speed = TUSB_SPEED_HIGH; break;
+  //           case 1: controller->speed = TUSB_SPEED_FULL; break;
+  //           case 2: controller->speed = TUSB_SPEED_LOW; break;
+  //           default: controller->speed = TUSB_SPEED_FULL; break;
+  //         }
           
-          // 启动端口复位
-          hcd_port_reset(rhport);
-        } else {
-          // 设备断开连接
-          if (controller->port_enabled) {
-            controller->port_enabled = false;
-            hcd_event_device_remove(rhport, true);
-          }
-        }
-      }
-    }
+  //         // 启动端口复位
+  //         hcd_port_reset(rhport);
+  //       } else {
+  //         // 设备断开连接
+  //         if (controller->port_enabled) {
+  //           controller->port_enabled = false;
+  //           hcd_event_device_remove(rhport, true);
+  //         }
+  //       }
+  //     }
+  //   }
     
-    // 检查端口使能状态变化
-    if (hprt & USB_OTG_HPRT_PENCHNG) {
-      bool enabled = (hprt & USB_OTG_HPRT_PENA) ? true : false;
+  //   // 检查端口使能状态变化
+  //   if (hprt & USB_OTG_HPRT_PENCHNG) {
+  //     bool enabled = (hprt & USB_OTG_HPRT_PENA) ? true : false;
       
-      // 清除端口使能变化标志位
-      uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
-      new_hprt |= USB_OTG_HPRT_PENCHNG;
-      *(__IO uint32_t*)controller->hprt_base = new_hprt;
+  //     // 清除端口使能变化标志位
+  //     uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
+  //     new_hprt |= USB_OTG_HPRT_PENCHNG;
+  //     *(__IO uint32_t*)controller->hprt_base = new_hprt;
       
-      if (enabled && controller->connected && !controller->port_enabled) {
-        controller->port_enabled = true;
+  //     if (enabled && controller->connected && !controller->port_enabled) {
+  //       controller->port_enabled = true;
         
-        // 通知上层设备已连接
-        hcd_event_device_attach(rhport, true);
-      } else if (!enabled && controller->port_enabled) {
-        controller->port_enabled = false;
-      }
-    }
-  }
+  //       // 通知上层设备已连接
+  //       hcd_event_device_attach(rhport, true);
+  //     } else if (!enabled && controller->port_enabled) {
+  //       controller->port_enabled = false;
+  //     }
+  //   }
+  // }
   
   // 处理设备断开连接中断
   if (gintsts & USB_OTG_GINTSTS_DISCINT) {

@@ -32,6 +32,8 @@
 #include "stm32h7xx.h"
 #include "usb_otg.h"
 
+#define HPRT_W1_C_MASK (USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG) // 清除W1C位
+
 // 外部声明
 extern HCD_HandleTypeDef hhcd_USB_OTG_HS;
 
@@ -206,19 +208,22 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   uint32_t gintsts = USBx->GINTSTS & USBx->GINTMSK;
   
   // 处理端口中断
-  if (gintsts & USB_OTG_GINTSTS_HPRTINT) {
+  if (gintsts & USB_OTG_GINTSTS_HPRTINT) { // 端口中断
+    USB_HOST_DBG("端口中断");
     uint32_t hprt = *(__IO uint32_t*)controller->hprt_base;
     
     // 检查端口连接状态变化
-    if (hprt & USB_OTG_HPRT_PCDET) {
+    if (hprt & USB_OTG_HPRT_PCDET) { // 连接检测标志
+
       bool connected = (hprt & USB_OTG_HPRT_PCSTS) ? true : false;
       
       // 清除连接检测标志位
-      uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
+      uint32_t new_hprt = hprt & ~HPRT_W1_C_MASK;
       new_hprt |= USB_OTG_HPRT_PCDET;
       *(__IO uint32_t*)controller->hprt_base = new_hprt;
       
       if (connected != controller->connected) {
+        USB_HOST_DBG("连接状态变化");
         controller->connected = connected;
         
         if (connected) {
@@ -232,7 +237,14 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
           }
           
           // 启动端口复位
-          // hcd_port_reset(rhport);
+          hcd_port_reset(rhport);
+
+          USB_HOST_DBG("端口复位完成");
+
+          // 连接检测标志位
+          new_hprt = hprt & ~HPRT_W1_C_MASK;
+          new_hprt &= ~USB_OTG_HPRT_PCDET;
+          *(__IO uint32_t*)controller->hprt_base = new_hprt;
         } else {
           // 设备断开连接
           if (controller->port_enabled) {
@@ -244,20 +256,26 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
     }
     
     // 检查端口使能状态变化
-    if (hprt & USB_OTG_HPRT_PENCHNG) {
+    if (hprt & USB_OTG_HPRT_PENCHNG) { // 端口使能变化标志
+      USB_HOST_DBG("端口使能变化");
+
       bool enabled = (hprt & USB_OTG_HPRT_PENA) ? true : false;
       
-      // 清除端口使能变化标志位
-      uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
+      // 清除端口使能变化标志位 和 连接检测标志位
+      uint32_t new_hprt = hprt & ~HPRT_W1_C_MASK;
       new_hprt |= USB_OTG_HPRT_PENCHNG;
+      // new_hprt |= USB_OTG_HPRT_PCDET;
       *(__IO uint32_t*)controller->hprt_base = new_hprt;
       
-      if (enabled && controller->connected && !controller->port_enabled) {
+      if (enabled && controller->connected && !controller->port_enabled) { // 端口使能变化完成
+
+        USB_HOST_DBG("端口使能变化完成");
+
         controller->port_enabled = true;
         
         // 通知上层设备已连接
         hcd_event_device_attach(rhport, true);
-      } else if (!enabled && controller->port_enabled) {
+      } else if (!enabled && controller->port_enabled) {  // 变成未使能状态
         controller->port_enabled = false;
       }
     }
@@ -265,6 +283,7 @@ void hcd_int_handler(uint8_t rhport, bool in_isr) {
   
   // 处理设备断开连接中断
   if (gintsts & USB_OTG_GINTSTS_DISCINT) {
+    USB_HOST_DBG("断开连接中断");
     // 清除断开连接中断标志
     USBx->GINTSTS = USB_OTG_GINTSTS_DISCINT;
     
@@ -319,28 +338,25 @@ bool hcd_port_connect_status(uint8_t rhport) {
 
 // 在端口上重置USB总线
 void hcd_port_reset(uint8_t rhport) {
+  USB_HOST_DBG("启动复位");
   dwc2_controller_t* controller = get_controller(rhport);
   if (!controller) return;
   
   uint32_t hprt = *(__IO uint32_t*)controller->hprt_base;
-  uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG);
+  uint32_t new_hprt = hprt & ~HPRT_W1_C_MASK;
   new_hprt |= USB_OTG_HPRT_PRST;
   *(__IO uint32_t*)controller->hprt_base = new_hprt;
-  
-  // 重置至少需要10ms
-  HAL_Delay(20);
-  
-  // 结束复位
-  hcd_port_reset_end(rhport);
+
 }
 
 // 完成总线复位序列
 void hcd_port_reset_end(uint8_t rhport) {
+  USB_HOST_DBG("结束复位");
   dwc2_controller_t* controller = get_controller(rhport);
   if (!controller) return;
   
   uint32_t hprt = *(__IO uint32_t*)controller->hprt_base;
-  uint32_t new_hprt = hprt & ~(USB_OTG_HPRT_PENA | USB_OTG_HPRT_PCDET | USB_OTG_HPRT_PENCHNG | USB_OTG_HPRT_POCCHNG | USB_OTG_HPRT_PRST);
+  uint32_t new_hprt = hprt & ~(HPRT_W1_C_MASK | USB_OTG_HPRT_PRST);
   *(__IO uint32_t*)controller->hprt_base = new_hprt;
 }
 

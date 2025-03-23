@@ -30,6 +30,7 @@
 #include "common/tusb_common.h"
 #include "osal/osal.h"
 #include "common/tusb_fifo.h"
+#include "usb_otg.h"
 
 #ifdef __cplusplus
  extern "C" {
@@ -202,6 +203,7 @@ extern void hcd_event_handler(hcd_event_t const* event, bool in_isr);
 // Helper to send device attach event
 TU_ATTR_ALWAYS_INLINE static inline
 void hcd_event_device_attach(uint8_t rhport, bool in_isr) {
+  USB_HOST_DBG("设备连接事件");
   hcd_event_t event;
   event.rhport              = rhport;
   event.event_id            = HCD_EVENT_DEVICE_ATTACH;

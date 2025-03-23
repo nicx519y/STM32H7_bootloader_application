@@ -124,7 +124,7 @@ void USB_HS_EnhancedIRQHandler(void)
   // 调用TinyUSB的中断处理函数
   extern void tuh_int_handler(uint8_t rhport, bool in_isr);
   USB_HOST_DBG("  Calling TinyUSB handler...");
-  tuh_int_handler(1, true);
+  tuh_int_handler(1, false);
   
   // 检查HPRT的变化
   uint32_t hprt_after = *hprt_reg;
@@ -219,4 +219,19 @@ void USB_HS_MonitorTinyUSB(void)
     
     USB_HOST_DBG("=====================");
   }
+}
+
+void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t idx, uint8_t const* report_desc, uint16_t desc_len)
+{
+  USB_HOST_DBG("设备挂载成功");
+}
+
+void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t idx)
+{ 
+  USB_HOST_DBG("设备卸载成功");
+}
+
+void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t idx, uint8_t const* report, uint16_t len)
+{
+  USB_HOST_DBG("设备报告接收成功");
 }

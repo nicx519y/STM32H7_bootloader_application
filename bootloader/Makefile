@@ -65,7 +65,8 @@ Drivers/USART/usart.c \
 Drivers/QSPI-W25Q64/qspi-w25q64.c \
 Core/Src/system_stm32h7xx.c \
 Core/Src/sysmem.c \
-Core/Src/syscalls.c  
+Core/Src/syscalls.c \
+Core/Src/firmware_upgrade.c  
 
 
 # ASM sources

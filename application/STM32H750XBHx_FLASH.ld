@@ -55,8 +55,12 @@ ENTRY(Reset_Handler)
 /* Highest address of the user mode stack */
 _estack = ORIGIN(DTCMRAM) + LENGTH(DTCMRAM);    /* end of DTCMRAM */
 /* Generate a link error if heap and stack don't fit into RAM */
-_Min_Heap_Size = 0x400;      /* 32KB 堆 */
-_Min_Stack_Size = 0x200;     /* 8KB 栈 */
+_Min_Heap_Size = 0x400;      /* 1KB 堆 */
+_Min_Stack_Size = 0x200;     /* 512B 栈 */
+
+/* 双槽升级方案地址定义 */
+APPLICATION_SLOT_A_ADDR = 0x90010000;           /* Application Slot A (1MB) - 偏移64KB给升级元数据 */
+APPLICATION_SLOT_B_ADDR = 0x90110000;           /* Application Slot B (1MB) */
 
 /* Specify the memory areas */
 MEMORY
@@ -66,63 +70,43 @@ DTCMRAM (xrw)                 : ORIGIN = 0x20000000, LENGTH = 128K
 RAM (xrw)                     : ORIGIN = 0x24000000, LENGTH = 512K
 RAM_D2 (xrw)                  : ORIGIN = 0x30000000, LENGTH = 288K
 RAM_D3 (xrw)                  : ORIGIN = 0x38000000, LENGTH = 64K
-FLASH (rx)                    : ORIGIN = 0x90000000, LENGTH = 2048K
-WEB_RESOURCES_FLASH (rx)      : ORIGIN = 0x90200000, LENGTH = 1024K
-ADC_VALUES_MAPPING_FLASH (rx) : ORIGIN = 0x90300000, LENGTH = 1024K
-CONFIG_FLASH (rx)             : ORIGIN = 0x90400000, LENGTH = 1024K
+/* Application使用连续的1MB空间 */
+FLASH (rx)                    : ORIGIN = APPLICATION_SLOT_A_ADDR, LENGTH = 1024K
 }
 
 /* Define output sections */
 SECTIONS
 {
-  /* 向量表必须在 Flash */
-  _sivector = LOADADDR(.isr_vector);
+  /* 向量表 - 放在FLASH的开头，运行时复制到ITCMRAM */
   .isr_vector :
   {
     . = ALIGN(4);
     KEEP(*(.isr_vector))
     . = ALIGN(4);
-
-    _evector = .;           /* 添加向量表结束标记 */
-  } >ITCMRAM AT>FLASH
-
-  /* Reset_Handler 必须在 Flash */
-  .text.boot :
-  {
-    . = ALIGN(4);
-    *(.text.boot.Reset_Handler)  /* 把Reset_Handler 放在 Flash */
-    *(.text.startup)
-    . = ALIGN(4);
   } >FLASH
 
-  /* 其他代码在 RAM */
-  _sitext = LOADADDR(.text);
+  /* 代码段 - 存储在FLASH，运行时复制到RAM */
   .text :
   {
     . = ALIGN(4);
-    _stext = .;
     *(.text)           
-    *(.text.*)         /* 这里不会匹配已经放置的 .text.boot.Reset_Handler */
+    *(.text.*)
     *(.glue_7)
     *(.glue_7t)
     *(.eh_frame)
     KEEP (*(.init))
     KEEP (*(.fini))
     . = ALIGN(4);
-    _etext = .;
-  } >RAM AT> FLASH
+  } >FLASH
 
-  /* Constant data goes into FLASH */
-  _sirodata = LOADADDR(.rodata);
+  /* 常量数据 - 存储在FLASH，运行时复制到RAM */
   .rodata :
   {
     . = ALIGN(4);
-    _srodata = .;
     *(.rodata)         /* .rodata sections (constants, strings, etc.) */
     *(.rodata*)        /* .rodata* sections (constants, strings, etc.) */
     . = ALIGN(4);
-    _erodata = .;
-  } >RAM AT> FLASH
+  } >FLASH
   
   /* ARM exception tables */
   .ARM.extab :
@@ -130,86 +114,102 @@ SECTIONS
     __extab_start = .;
     *(.ARM.extab* .gnu.linkonce.armextab.*)
     __extab_end = .;
-  } >RAM AT>FLASH
+  } >FLASH
 
   .ARM.exidx :
   {
     __exidx_start = .;
     *(.ARM.exidx* .gnu.linkonce.armexidx.*)
     __exidx_end = .;
-  } >RAM AT>FLASH
+  } >FLASH
 
-  _sipreinit_array = LOADADDR(.preinit_array);
-  .preinit_array     :
+  .preinit_array :
   {
     PROVIDE_HIDDEN (__preinit_array_start = .);
     KEEP (*(.preinit_array*))
     PROVIDE_HIDDEN (__preinit_array_end = .);
-  } >RAM AT> FLASH
+  } >FLASH
 
-  _siinit_array = LOADADDR(.init_array);
   .init_array :
   {
     PROVIDE_HIDDEN (__init_array_start = .);
     KEEP (*(SORT(.init_array.*)))
     KEEP (*(.init_array*))
     PROVIDE_HIDDEN (__init_array_end = .);
-  } >RAM AT> FLASH
+  } >FLASH
 
-  _sifini_array = LOADADDR(.fini_array);
   .fini_array :
   {
     PROVIDE_HIDDEN (__fini_array_start = .);
     KEEP (*(SORT(.fini_array.*)))
     KEEP (*(.fini_array*))
     PROVIDE_HIDDEN (__fini_array_end = .);
-  } >RAM AT> FLASH
+  } >FLASH
 
-  /* used by the startup to initialize data */
+  /* 初始化数据，运行时从FLASH复制到RAM */
   _sidata = LOADADDR(.data);
-
-  /* Initialized data sections goes into RAM, load LMA copy after code */
   .data : 
   {
     . = ALIGN(4);
     _sdata = .;        /* create a global symbol at data start */
     *(.data)           /* .data sections */
     *(.data*)          /* .data* sections */
-
     . = ALIGN(4);
     _edata = .;        /* define a global symbol at data end */
-  } >RAM AT> FLASH
+  } >FLASH
 
+  /* 定义运行时复制所需的符号 */
+  _sivector = ORIGIN(FLASH);                                  /* 向量表在FLASH中的位置 */
+  _evector = _sivector + SIZEOF(.isr_vector);                 /* 向量表结束位置 */
+  _sitext = _evector;                                         /* 代码段在FLASH中的位置 */  
+  _etext = _sitext + SIZEOF(.text);                           /* 代码段结束位置 */
+  _sirodata = _etext;                                         /* 只读数据在FLASH中的位置 */
+  _erodata = _sirodata + SIZEOF(.rodata);                     /* 只读数据结束位置 */
   
-  /* Uninitialized data section */
-  . = ALIGN(4);
-  .bss :
+  /* 运行时的目标地址（VMA） */
+  _vector_start = ORIGIN(ITCMRAM);                           /* 向量表运行地址 */
+  _text_start = ORIGIN(RAM);                                 /* 代码段运行地址 */
+  _rodata_start = _text_start + SIZEOF(.text);               /* 只读数据运行地址 */
+  
+  /* 为启动代码提供运行时地址符号 */
+  _stext = _text_start;                                      /* 代码段运行时起始地址 */
+  _srodata = _rodata_start;                                  /* 只读数据运行时起始地址 */
+  
+  /* 未初始化数据段 - 在RAM中，无需从FLASH加载 */
+  .bss (NOLOAD) :
   {
-    /* This is used by the startup in order to initialize the .bss secion */
+    . = ALIGN(4);
     _sbss = .;         /* define a global symbol at bss start */
     __bss_start__ = _sbss;
     *(.bss)
     *(.bss*)
     *(COMMON)
-
     . = ALIGN(4);
     _ebss = .;         /* define a global symbol at bss end */
     __bss_end__ = _ebss;
   } >RAM
 
-  /* User_heap_stack section, used to check that there is enough RAM left */
-  ._user_heap_stack :
+  /* DMA相关段 */
+  ._RAM_D1_Area (NOLOAD) :
+  {
+    . = ALIGN(32);
+    *(.DMA_Section)
+    *(.DMA_Section*)
+    . = ALIGN(32);
+  } >RAM
+
+  /* User_heap_stack section */
+  ._user_heap_stack (NOLOAD) :
   {
     . = ALIGN(8);
-    PROVIDE ( end = . );        /* C 标准库（如 newlib）用它来确定堆的起始位置 */
-    PROVIDE ( _end = . );       /* 某些嵌入式系统用它来初始化堆管理器 */ 
-    . = . + _Min_Heap_Size;     /* 堆大小 */
-    . = . + _Min_Stack_Size;    /* 栈大小 */
+    PROVIDE ( end = . );       
+    PROVIDE ( _end = . );       
+    . = . + _Min_Heap_Size;     
+    . = . + _Min_Stack_Size;    
     . = ALIGN(8);
   } >DTCMRAM
 
-  
-  ._RAM_D2_Area :
+  ._RAM_D2_Area (NOLOAD) :
   {
       . = ALIGN(32);
       *(.DMA_Section)         /* RAM_D2 area section */
@@ -217,11 +217,11 @@ SECTIONS
       . = ALIGN(32);
   } >RAM_D2
 
-  ._RAM_D3_Area :
+  ._RAM_D3_Area (NOLOAD) :
   {
       . = ALIGN(32);
-      *(.BDMA_Section)         /* RAM_D2 area section */
-      *(.BDMA_Section*)        /* RAM_D2 area section */
+      *(.BDMA_Section)         /* RAM_D3 area section */
+      *(.BDMA_Section*)        /* RAM_D3 area section */
       . = ALIGN(32);
   } >RAM_D3
 
@@ -235,12 +235,9 @@ SECTIONS
 
   .ARM.attributes 0 : { *(.ARM.attributes) }
 
-  PROVIDE(WEB_RESOURCES_FLASH_START = ORIGIN(WEB_RESOURCES_FLASH));
-  PROVIDE(WEB_RESOURCES_FLASH_END = ORIGIN(WEB_RESOURCES_FLASH) + LENGTH(WEB_RESOURCES_FLASH));
-  PROVIDE(ADC_VALUES_MAPPING_FLASH_START = ORIGIN(ADC_VALUES_MAPPING_FLASH));
-  PROVIDE(ADC_VALUES_MAPPING_FLASH_END = ORIGIN(ADC_VALUES_MAPPING_FLASH) + LENGTH(ADC_VALUES_MAPPING_FLASH));
-  PROVIDE(CONFIG_FLASH_START = ORIGIN(CONFIG_FLASH));
-  PROVIDE(CONFIG_FLASH_END = ORIGIN(CONFIG_FLASH) + LENGTH(CONFIG_FLASH));
+  /* 提供双槽地址给应用程序使用 */
+  PROVIDE(APPLICATION_SLOT_A_START = APPLICATION_SLOT_A_ADDR);
+  PROVIDE(APPLICATION_SLOT_B_START = APPLICATION_SLOT_B_ADDR);
 }
 
 

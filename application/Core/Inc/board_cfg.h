@@ -77,9 +77,42 @@
 #define CONFIG_VERSION                      (uint32_t)0x000007  //配置版本 三位版本号 0x aa bb cc
 #define ADC_MAPPING_VERSION                 (uint32_t)0x000001  //ADC值映射表版本
 
-#define WEB_RESOURCES_ADDR                  0x90200000       // 网页资源地址 memory map 地址 qspi flash 0x90100000 定义在 STM32H750XBHx_FLASH.ld 中
-#define ADC_VALUES_MAPPING_ADDR             0x90300000  // ADC值映射表地址  qspi flash 0x00200000 定义在 STM32H750XBHx_FLASH.ld 中
-#define CONFIG_ADDR                         0x90400000  // 配置数据地址  qspi flash 0x00300000 定义在 STM32H750XBHx_FLASH.ld 中
+/* QSPI W25Q64 配置 */
+#define QSPI_BASE_ADDR                  0x90000000       // QSPI 映射基地址
+#define QSPI_SIZE                       0x800000         // 8MB (64Mbit)
+#define QSPI_SECTOR_SIZE                0x1000           // 4KB 扇区大小
+#define QSPI_PAGE_SIZE                  0x100            // 256B 页大小
+
+/* 存储区域分配 - 与bootloader保持一致 */
+#define UPGRADE_METADATA_ADDR           0x90000000       // 升级元数据区 (与bootloader一致)
+
+/* 槽位A地址定义 */
+#define APPLICATION_SLOT_A_ADDR         0x90010000       // Application Slot A (1MB)
+#define WEB_RESOURCES_SLOT_A_ADDR       0x90110000       // Web Resources Slot A (512KB)  
+#define CONFIG_SLOT_A_ADDR              0x90190000       // Config Slot A (64KB)
+#define ADC_MAPPING_SLOT_A_ADDR         0x901A0000       // ADC Mapping Slot A (64KB)
+
+/* 槽位B地址定义 */  
+#define APPLICATION_SLOT_B_ADDR         0x901B0000       // Application Slot B (1MB)
+#define WEB_RESOURCES_SLOT_B_ADDR       0x902B0000       // Web Resources Slot B (512KB)
+#define CONFIG_SLOT_B_ADDR              0x90330000       // Config Slot B (64KB)
+#define ADC_MAPPING_SLOT_B_ADDR         0x90340000       // ADC Mapping Slot B (64KB)
+
+/* 槽位大小定义 */
+#define APPLICATION_SLOT_SIZE           (1024 * 1024)    // 1MB
+#define WEB_RESOURCES_SLOT_SIZE         (1536 * 1024)    // 1.5MB
+#define CONFIG_SLOT_SIZE                (32 * 1024)      // 32KB
+#define ADC_MAPPING_SLOT_SIZE           (64 * 1024)      // 64KB
+#define UPGRADE_METADATA_SIZE           (320 * 1024)     // 320KB
+
+/* 升级元数据结构定义 */
+#define UPGRADE_METADATA_MAGIC          0x55AA55AA
+#define UPGRADE_METADATA_VERSION        0x01
+
+/* 兼容性：更新原有地址定义以指向Slot A */
+#define WEB_RESOURCES_ADDR              WEB_RESOURCES_SLOT_A_ADDR    // 网页资源地址
+#define ADC_VALUES_MAPPING_ADDR         ADC_MAPPING_SLOT_A_ADDR      // ADC值映射地址
+#define CONFIG_ADDR                     CONFIG_SLOT_A_ADDR           // 配置地址
 
 #define NUM_ADC_VALUES_MAPPING              8               // 最大8个映射 ADC按钮映射表用于值查找
 #define MAX_ADC_VALUES_LENGTH               40              // 每个映射最大40个值 ADC按钮映射表用于值查找

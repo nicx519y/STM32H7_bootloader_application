@@ -45,6 +45,57 @@ defined in linker script */
 .word  _ebss
 /* stack used for SystemInit_ExtMemCtl; always internal RAM used */
 
+/* 双槽升级相关地址定义 */
+.equ APPLICATION_SLOT_A_ADDR,      0x90000000
+.equ APPLICATION_SLOT_B_ADDR,      0x90100000
+.equ UPGRADE_METADATA_ADDR,        0x90530000
+.equ UPGRADE_METADATA_MAGIC,       0x55AA55AA
+.equ SLOT_SELECT_OFFSET,           0x04        /* 槽位选择偏移 */
+
+/**
+ * @brief  槽位选择函数 - 读取升级元数据确定启动槽位
+ * @retval r0: 0=Slot A, 1=Slot B
+*/
+determine_boot_slot:
+    push {r1, r2, r3, lr}
+    
+    /* 读取升级元数据区的魔数 */
+    ldr r1, =UPGRADE_METADATA_ADDR
+    ldr r2, [r1]                    /* 读取魔数 */
+    ldr r3, =UPGRADE_METADATA_MAGIC
+    cmp r2, r3                      /* 比较魔数 */
+    bne use_slot_a                  /* 魔数不匹配，使用Slot A */
+    
+    /* 魔数匹配，读取槽位选择标志 */
+    ldr r2, [r1, #SLOT_SELECT_OFFSET]   /* 读取槽位选择 */
+    and r2, r2, #0x01               /* 只取最低位 */
+    cmp r2, #1                      /* 检查是否选择Slot B */
+    beq use_slot_b                  /* 选择Slot B */
+    
+use_slot_a:
+    mov r0, #0                      /* 返回0，使用Slot A */
+    b slot_selected
+    
+use_slot_b:
+    mov r0, #1                      /* 返回1，使用Slot B */
+    
+slot_selected:
+    pop {r1, r2, r3, pc}            /* 返回 */
+
+/**
+ * @brief  通用拷贝函数
+ * @param  r0: 源地址
+ * @param  r1: 目标地址
+ * @param  r2: 结束地址
+*/
+copy_section:
+    cmp     r1, r2          /* 比较当前地址和结束地址 */
+    ittt    lo              /* if r1 < r2 */
+    ldrlo   r3, [r0], #4    /* 从源地址读取4字节并递增源地址 */
+    strlo   r3, [r1], #4    /* 写入目标地址并递增目标地址 */
+    blo     copy_section    /* 继续循环 */
+    bx      lr              /* 返回 */
+
 /**
  * @brief  This is the code that gets called when the processor first
  *          starts execution following a reset event. Only the absolutely
@@ -54,22 +105,29 @@ defined in linker script */
  * @retval : None
 */
 
-    .section  .text.boot.Reset_Handler,"ax",%progbits
+    .section  .text,"ax",%progbits
     .weak  Reset_Handler
     .type  Reset_Handler, %function
-
-/* 先定义拷贝函数 */
-copy_section:
-    cmp     r1, r2          /* 比较当前地址和结束地址 */
-    ittt    lo              /* if r1 < r2 */
-    ldrlo   r3, [r0], #4    /* 从源地址读取4字节并递增源地址 */
-    strlo   r3, [r1], #4    /* 写入目标地址并递增目标地址 */
-    blo     copy_section    /* 继续循环 */
-    bx      lr              /* 返回 */
 
 Reset_Handler:
     ldr   sp, =_estack      /* set stack pointer */
 
+    /* 确定启动槽位 */
+    bl    determine_boot_slot
+    mov   r11, r0           /* 保存槽位选择结果到r11 */
+    
+    /* 根据槽位选择计算基地址 */
+    cmp   r11, #0
+    beq   set_slot_a_base
+    
+set_slot_b_base:
+    ldr   r10, =APPLICATION_SLOT_B_ADDR    /* r10 = Slot B 基地址 */
+    b     continue_boot
+    
+set_slot_a_base:
+    ldr   r10, =APPLICATION_SLOT_A_ADDR    /* r10 = Slot A 基地址 */
+    
+continue_boot:
     /* 先清零 BSS 段 */
     ldr r2, =_sbss          /* BSS 段起始地址 */
     ldr r4, =_ebss          /* BSS 段结束地址 */
@@ -80,14 +138,16 @@ bss_loop:
     strlt r3, [r2], #4      /* 写入0并递增地址 */
     blt bss_loop            /* 继续循环 */
 
-    /* 拷贝数据段 */
-    ldr r0, =_sidata        /* Flash 中的源地址 */
+    /* 拷贝数据段 - 使用动态基地址 */
+    ldr r0, =0xC0000        /* 数据段在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =_sdata         /* RAM 中的目标地址 */
     ldr r2, =_edata         /* 结束地址 */
     bl  copy_section
 
-    /* 拷贝常量段 */
-    ldr r0, =_sirodata      /* Flash 中的源地址 */
+    /* 拷贝常量段 - 使用动态基地址 */
+    ldr r0, =0x80000        /* 常量段在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =_srodata       /* RAM 中的目标地址 */
     ldr r2, =_erodata       /* 结束地址 */
     bl  copy_section
@@ -184,10 +244,14 @@ bss_loop:
     dsb
     isb
 
-    /* 拷贝向量表 */
-    ldr r0, =_sivector      /* Flash 中的源地址 */
+    /* 拷贝向量表 - 使用动态基地址 */
+    ldr r0, =0x0000         /* 向量表在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =g_pfnVectors   /* RAM 中的目标地址 */
-    ldr r2, =_evector       /* 结束地址 */
+    ldr r2, =_evector       /* 结束地址计算：起始地址 + 向量表大小 */
+    ldr r3, =g_pfnVectors   /* 获取向量表起始地址 */
+    sub r2, r2, r3          /* 计算向量表大小 */
+    add r2, r2, r1          /* r2 = 目标地址 + 大小 = 结束地址 */
     bl  copy_section
 
     /* 重定位向量表 */
@@ -195,39 +259,44 @@ bss_loop:
     ldr r1, =0xE000ED08     /* SCB->VTOR 的地址 */
     str r0, [r1]            /* 设置 VTOR  */
 
-
-    /* 拷贝代码段 */
-    ldr r0, =_sitext        /* Flash 中的源地址 */
+    /* 拷贝代码段 - 使用动态基地址 */
+    ldr r0, =0x0400         /* 代码段在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =_stext         /* RAM 中的目标地址 */
     ldr r2, =_etext         /* 结束地址 */
     bl  copy_section
 
-    /* 拷贝 ARM.extab */
-    ldr r0, =__extab_start  /* Flash 中的源地址 */
+    /* 拷贝 ARM.extab - 使用动态基地址 */
+    ldr r0, =0x90000        /* ARM.extab在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =__extab_start  /* RAM 中的目标地址 */
     ldr r2, =__extab_end    /* 结束地址 */
     bl  copy_section
 
-    /* 拷贝 ARM.exidx */
-    ldr r0, =__exidx_start  /* Flash 中的源地址 */
+    /* 拷贝 ARM.exidx - 使用动态基地址 */
+    ldr r0, =0xA0000        /* ARM.exidx在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =__exidx_start  /* RAM 中的目标地址 */
     ldr r2, =__exidx_end    /* 结束地址 */
     bl  copy_section
 
-    /* 拷贝 preinit_array */
-    ldr r0, =_sipreinit_array
+    /* 拷贝 preinit_array - 使用动态基地址 */
+    ldr r0, =0xE0000        /* preinit_array在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =__preinit_array_start
     ldr r2, =__preinit_array_end
     bl  copy_section
 
-    /* 拷贝 init_array */
-    ldr r0, =_siinit_array
+    /* 拷贝 init_array - 使用动态基地址 */
+    ldr r0, =0xE1000        /* init_array在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =__init_array_start
     ldr r2, =__init_array_end
     bl  copy_section
 
-    /* 拷贝 fini_array */
-    ldr r0, =_sifini_array
+    /* 拷贝 fini_array - 使用动态基地址 */
+    ldr r0, =0xE2000        /* fini_array在槽位中的偏移 */
+    add r0, r0, r10         /* r0 = 基地址 + 偏移 */
     ldr r1, =__fini_array_start
     ldr r2, =__fini_array_end
     bl  copy_section

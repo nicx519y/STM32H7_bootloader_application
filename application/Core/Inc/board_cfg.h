@@ -88,22 +88,25 @@
 
 /* 槽位A地址定义 */
 #define APPLICATION_SLOT_A_ADDR         0x90010000       // Application Slot A (1MB)
-#define WEB_RESOURCES_SLOT_A_ADDR       0x90110000       // Web Resources Slot A (512KB)  
-#define CONFIG_SLOT_A_ADDR              0x90190000       // Config Slot A (64KB)
-#define ADC_MAPPING_SLOT_A_ADDR         0x901A0000       // ADC Mapping Slot A (64KB)
+#define APPLICATION_SLOT_B_ADDR         0x902B0000       // Application Slot B (1MB)
 
-/* 槽位B地址定义 */  
-#define APPLICATION_SLOT_B_ADDR         0x901B0000       // Application Slot B (1MB)
-#define WEB_RESOURCES_SLOT_B_ADDR       0x902B0000       // Web Resources Slot B (512KB)
-#define CONFIG_SLOT_B_ADDR              0x90330000       // Config Slot B (64KB)
-#define ADC_MAPPING_SLOT_B_ADDR         0x90340000       // ADC Mapping Slot B (64KB)
+/* Web Resources 槽位定义 */
+#define WEB_RESOURCES_SLOT_A_ADDR       0x90110000       // Web Resources Slot A (1.5MB)
+#define WEB_RESOURCES_SLOT_B_ADDR       0x903B0000       // Web Resources Slot B (1.5MB)
+
+/* Config 槽位定义 */
+#define CONFIG_SLOT_A_ADDR              0x90290000       // Config Slot A (64KB)
+#define CONFIG_SLOT_B_ADDR              0x904B0000       // Config Slot B (64KB)
+
+/* ADC Mapping 槽位定义 */
+#define ADC_MAPPING_SLOT_A_ADDR         0x902A0000       // ADC Mapping Slot A (64KB)
+#define ADC_MAPPING_SLOT_B_ADDR         0x904C0000       // ADC Mapping Slot B (64KB)
 
 /* 槽位大小定义 */
-#define APPLICATION_SLOT_SIZE           (1024 * 1024)    // 1MB
+#define APPLICATION_SLOT_SIZE           (1 * 1024 * 1024)    // 1MB
 #define WEB_RESOURCES_SLOT_SIZE         (1536 * 1024)    // 1.5MB
-#define CONFIG_SLOT_SIZE                (32 * 1024)      // 32KB
+#define CONFIG_SLOT_SIZE                (64 * 1024)      // 64KB
 #define ADC_MAPPING_SLOT_SIZE           (64 * 1024)      // 64KB
-#define UPGRADE_METADATA_SIZE           (320 * 1024)     // 320KB
 
 /* 升级元数据结构定义 */
 #define UPGRADE_METADATA_MAGIC          0x55AA55AA

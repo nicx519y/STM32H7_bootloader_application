@@ -96,19 +96,26 @@ typedef struct {
 | Config | 32KB | 32KB | 设备配置数据 |
 | ADC Mapping | 64KB | 64KB | ADC通道映射配置 |
 
-### 内存布局
+## QSPI Flash地址分配
 
+### W25Q64 (8MB) 地址映射
 ```
-QSPI Flash (8MB) 地址分配:
-0x90000000-0x900FFFFF: Application Slot A (1MB)
-0x90100000-0x901FFFFF: Application Slot B (1MB)
-0x90200000-0x9037FFFF: Web Resources Slot A (1.5MB)
-0x90380000-0x904FFFFF: Web Resources Slot B (1.5MB)
-0x90500000-0x90507FFF: Config Slot A (32KB)
-0x90508000-0x9050FFFF: Config Slot B (32KB)
-0x90510000-0x9051FFFF: ADC Mapping Slot A (64KB)
-0x90520000-0x9052FFFF: ADC Mapping Slot B (64KB)
-0x90530000-0x907FFFFF: 升级元数据区 (320KB)
+地址范围                   大小     说明
+0x90000000-0x90010000     64KB     升级元数据区
+
+【槽位A】
+0x90010000-0x90110000     1MB      Application Slot A  
+0x90110000-0x90290000     1.5MB    Web Resources Slot A
+0x90290000-0x902A0000     64KB     Config Slot A
+0x902A0000-0x902B0000     64KB     ADC Mapping Slot A
+
+【槽位B】  
+0x902B0000-0x903B0000     1MB      Application Slot B
+0x903B0000-0x904B0000     1.5MB    Web Resources Slot B  
+0x904B0000-0x904C0000     64KB     Config Slot B
+0x904C0000-0x904D0000     64KB     ADC Mapping Slot B
+
+0x904D0000-0x90800000     3.2MB    未使用区域
 ```
 
 ## 打包工具使用

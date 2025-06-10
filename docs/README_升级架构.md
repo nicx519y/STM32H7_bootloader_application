@@ -19,16 +19,22 @@
 
 ### QSPI Flash (8MB) - W25Q64
 ```
-0x90000000 - 0x90000FFF: 升级元数据区 (4KB)
-0x90010000 - 0x9010FFFF: Application Slot A (1MB)
-0x90110000 - 0x9018FFFF: Web Resources Slot A (512KB)
-0x90190000 - 0x9019FFFF: Config Slot A (64KB)
-0x901A0000 - 0x901AFFFF: ADC Mapping Slot A (64KB)
-0x901B0000 - 0x902AFFFF: Application Slot B (1MB)
-0x902B0000 - 0x9032FFFF: Web Resources Slot B (512KB)
-0x90330000 - 0x9033FFFF: Config Slot B (64KB)
-0x90340000 - 0x9034FFFF: ADC Mapping Slot B (64KB)
-0x90350000 - 0x907FFFFF: 未分配空间 (4.7MB)
+地址范围                   大小    说明
+0x90000000-0x90010000     64KB    升级元数据区
+
+【槽位A】  
+0x90010000-0x90110000     1MB     Application Slot A
+0x90110000-0x90290000     1.5MB   Web Resources Slot A  
+0x90290000-0x902A0000     64KB    Config Slot A
+0x902A0000-0x902B0000     64KB    ADC Mapping Slot A
+
+【槽位B】
+0x902B0000-0x903B0000     1MB     Application Slot B
+0x903B0000-0x904B0000     1.5MB   Web Resources Slot B
+0x904B0000-0x904C0000     64KB    Config Slot B  
+0x904C0000-0x904D0000     64KB    ADC Mapping Slot B
+
+0x904D0000-0x90800000     3.2MB   未使用区域
 ```
 
 ### RAM (512KB)

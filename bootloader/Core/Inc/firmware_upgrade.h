@@ -104,19 +104,25 @@ typedef struct {
 #define QSPI_BASE_ADDR                  0x90000000
 
 /* 元数据存储地址 (第一个扇区) */
-#define UPGRADE_METADATA_ADDR           (QSPI_BASE_ADDR + 0x000000)    // 0x90000000
+#define UPGRADE_METADATA_ADDR           0x90000000      /* 升级元数据区 (64KB) */
 
 /* 槽位A地址定义 */
-#define APPLICATION_SLOT_A_ADDR         (QSPI_BASE_ADDR + 0x010000)    // 0x90010000 - 1MB
-#define WEB_RESOURCES_SLOT_A_ADDR       (QSPI_BASE_ADDR + 0x110000)    // 0x90110000 - 512KB  
-#define CONFIG_SLOT_A_ADDR              (QSPI_BASE_ADDR + 0x190000)    // 0x90190000 - 64KB
-#define ADC_MAPPING_SLOT_A_ADDR         (QSPI_BASE_ADDR + 0x1A0000)    // 0x901A0000 - 64KB
+#define APPLICATION_SLOT_A_ADDR         0x90010000      /* Application Slot A (1MB) */
+#define WEB_RESOURCES_SLOT_A_ADDR       0x90110000      /* Web Resources Slot A (1.5MB) */
+#define CONFIG_SLOT_A_ADDR              0x90290000      /* Config Slot A (64KB) */
+#define ADC_MAPPING_SLOT_A_ADDR         0x902A0000      /* ADC Mapping Slot A (64KB) */
 
 /* 槽位B地址定义 */  
-#define APPLICATION_SLOT_B_ADDR         (QSPI_BASE_ADDR + 0x1B0000)    // 0x901B0000 - 1MB
-#define WEB_RESOURCES_SLOT_B_ADDR       (QSPI_BASE_ADDR + 0x2B0000)    // 0x902B0000 - 512KB
-#define CONFIG_SLOT_B_ADDR              (QSPI_BASE_ADDR + 0x330000)    // 0x90330000 - 64KB
-#define ADC_MAPPING_SLOT_B_ADDR         (QSPI_BASE_ADDR + 0x340000)    // 0x90340000 - 64KB
+#define APPLICATION_SLOT_B_ADDR         0x902B0000      /* Application Slot B (1MB) */
+#define WEB_RESOURCES_SLOT_B_ADDR       0x903B0000      /* Web Resources Slot B (1.5MB) */
+#define CONFIG_SLOT_B_ADDR              0x904B0000      /* Config Slot B (64KB) */
+#define ADC_MAPPING_SLOT_B_ADDR         0x904C0000      /* ADC Mapping Slot B (64KB) */
+
+/* 槽位大小定义 */
+#define APPLICATION_SLOT_SIZE           (1 * 1024 * 1024)      /* 1MB */
+#define WEB_RESOURCES_SLOT_SIZE         (1536 * 1024)          /* 1.5MB */
+#define CONFIG_SLOT_SIZE                (64 * 1024)            /* 64KB */
+#define ADC_MAPPING_SLOT_SIZE           (64 * 1024)            /* 64KB */
 
 /* Bootloader专用函数 - 升级管理 */
 

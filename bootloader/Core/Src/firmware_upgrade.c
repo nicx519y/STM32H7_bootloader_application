@@ -9,6 +9,23 @@
 #include "qspi-w25q64.h"
 #include <string.h>
 
+/* 确保常量定义可用 */
+#ifndef UPGRADE_MAX_ATTEMPTS
+#define UPGRADE_MAX_ATTEMPTS 3
+#endif
+
+#ifndef UPGRADE_STATUS_PENDING  
+#define UPGRADE_STATUS_PENDING 0x0B
+#endif
+
+#ifndef UPGRADE_STATUS_DOWNLOADED
+#define UPGRADE_STATUS_DOWNLOADED 0x02
+#endif
+
+#ifndef UPGRADE_STATUS_VERIFIED
+#define UPGRADE_STATUS_VERIFIED 0x04
+#endif
+
 /* CRC32查找表 */
 static const uint32_t crc32_table[256] = {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
@@ -140,22 +157,28 @@ static void upgrade_init_default_metadata(upgrade_metadata_t *metadata)
  */
 int upgrade_manager_init(void)
 {
-    /* 读取元数据 */
+    /* 尝试读取元数据 */
     if (upgrade_read_metadata(&g_metadata) == 0) {
         g_metadata_valid = true;
+        BOOT_DBG("Valid metadata found and loaded");
         return 0;
     }
     
-    /* 如果读取失败，初始化默认元数据 */
+    /* 如果读取失败，初始化默认元数据并写入Flash */
+    BOOT_DBG("No valid metadata found, initializing default metadata");
     upgrade_init_default_metadata(&g_metadata);
     
-    /* 写入默认元数据 */
+    /* 写入默认元数据到Flash */
     if (upgrade_write_metadata(&g_metadata) == 0) {
+        g_metadata_valid = true;
+        BOOT_DBG("Default metadata written to Flash successfully");
+        return 0;
+    } else {
+        /* 写入失败，但仍可使用内存中的默认配置 */
+        BOOT_DBG("Failed to write metadata to Flash, using default configuration in memory");
         g_metadata_valid = true;
         return 0;
     }
-    
-    return -1;
 }
 
 /**
@@ -163,15 +186,44 @@ int upgrade_manager_init(void)
  */
 int upgrade_read_metadata(upgrade_metadata_t *metadata)
 {
-    if (QSPI_W25Qxx_ReadBuffer((uint8_t*)metadata, UPGRADE_METADATA_ADDR, sizeof(upgrade_metadata_t)) != QSPI_W25Qxx_OK) {
-        return -1;
+    BOOT_DBG("[METADATA] Starting metadata read from address 0x%08X", UPGRADE_METADATA_ADDR);
+    
+    // 直接使用四线读取
+    int qspi_result = QSPI_W25Qxx_ReadBuffer((uint8_t*)metadata, UPGRADE_METADATA_ADDR, sizeof(upgrade_metadata_t));
+    if (qspi_result == QSPI_W25Qxx_OK) {
+        BOOT_DBG("[METADATA] QSPI read successful, data size: %d bytes", sizeof(upgrade_metadata_t));
+        
+        // 打印读取到的关键数据
+        BOOT_DBG("[METADATA] Magic: 0x%08X (expected: 0x%08X)", metadata->magic, UPGRADE_METADATA_MAGIC);
+        BOOT_DBG("[METADATA] Version: 0x%02X (expected: 0x%02X)", metadata->version, UPGRADE_METADATA_VERSION);
+        BOOT_DBG("[METADATA] Active slot: %d", metadata->active_slot);
+        BOOT_DBG("[METADATA] Upgrade status: %d", metadata->upgrade_status);
+        BOOT_DBG("[METADATA] Stored CRC32: 0x%08X", metadata->crc32);
+        
+        // 计算并比较CRC32
+        uint32_t calc_crc = upgrade_calculate_metadata_crc32(metadata);
+        BOOT_DBG("[METADATA] Calculated CRC32: 0x%08X", calc_crc);
+        
+        if (upgrade_is_metadata_valid(metadata)) {
+            BOOT_DBG("[METADATA] Validation successful");
+            return 0;
+        } else {
+            BOOT_DBG("[METADATA] Validation failed");
+            if (metadata->magic != UPGRADE_METADATA_MAGIC) {
+                BOOT_DBG("[METADATA] - Magic number mismatch");
+            }
+            if (metadata->version != UPGRADE_METADATA_VERSION) {
+                BOOT_DBG("[METADATA] - Version mismatch");
+            }
+            if (calc_crc != metadata->crc32) {
+                BOOT_DBG("[METADATA] - CRC32 mismatch");
+            }
+        }
+    } else {
+        BOOT_DBG("[METADATA] QSPI read failed, error code: %d", qspi_result);
     }
     
-    if (!upgrade_is_metadata_valid(metadata)) {
-        return -1;
-    }
-    
-    return 0;
+    return -1;
 }
 
 /**

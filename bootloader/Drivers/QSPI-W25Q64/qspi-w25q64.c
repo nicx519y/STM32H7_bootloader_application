@@ -390,6 +390,14 @@ int8_t QSPI_W25Qxx_SectorErase(uint32_t SectorAddress)
 		// 定义QSPI句柄，这里保留使用cubeMX生成的变量命名，方便用户参考和移植
 
 	QSPI_CommandTypeDef s_command;	// QSPI传输配置
+	uint32_t physical_addr;
+	
+	// 地址转换：0x90000000 -> 0x0
+	if (SectorAddress >= 0x90000000) {
+		physical_addr = SectorAddress - 0x90000000;
+	} else {
+		physical_addr = SectorAddress;
+	}
 	
 	s_command.InstructionMode   	= QSPI_INSTRUCTION_1_LINE;    // 1线指令模式
 	s_command.AddressSize       	= QSPI_ADDRESS_24_BITS;       // 24位地址模式
@@ -400,7 +408,7 @@ int8_t QSPI_W25Qxx_SectorErase(uint32_t SectorAddress)
 	s_command.AddressMode 			= QSPI_ADDRESS_1_LINE;        // 1线地址模式
 	s_command.DataMode 				= QSPI_DATA_NONE;             // 无数据
 	s_command.DummyCycles 			= 0;                          // 空周期个数
-	s_command.Address           	= SectorAddress;              // 要擦除的地址
+	s_command.Address           	= physical_addr;              // 使用物理地址
 	s_command.Instruction	 		= W25Qxx_CMD_SectorErase;     // 扇区擦除命令
 
 	// 发送写使能
@@ -662,26 +670,34 @@ int8_t QSPI_W25Qxx_WritePage(uint8_t* pBuffer, uint32_t WriteAddr, uint16_t NumB
 int8_t QSPI_W25Qxx_WriteBuffer(uint8_t* pBuffer, uint32_t WriteAddr, uint32_t NumByteToWrite)
 {   
 	int8_t status;
+	uint32_t physical_addr;
+	
+	// 地址转换：0x90000000 -> 0x0
+	if (WriteAddr >= 0x90000000) {
+		physical_addr = WriteAddr - 0x90000000;
+	} else {
+		physical_addr = WriteAddr;
+	}
 
 	// 计算需要擦除的扇区范围
-	uint32_t start_sector = WriteAddr & ~(W25Qxx_SECTOR_SIZE - 1);
-	uint32_t end_sector = (WriteAddr + NumByteToWrite - 1) & ~(W25Qxx_SECTOR_SIZE - 1);
+	uint32_t start_sector = physical_addr & ~(W25Qxx_SECTOR_SIZE - 1);
+	uint32_t end_sector = (physical_addr + NumByteToWrite - 1) & ~(W25Qxx_SECTOR_SIZE - 1);
 
-	QSPI_W25Qxx_DBG("start_sector: 0x%x, WriteAddr: 0x%x", start_sector, WriteAddr);
+	QSPI_W25Qxx_DBG("start_sector: 0x%x, WriteAddr: 0x%x", start_sector, physical_addr);
 	QSPI_W25Qxx_DBG("end_sector: 0x%x", end_sector);
 	
 	// 擦除所需的扇区
 	for(uint32_t sector = start_sector; sector <= end_sector; sector += W25Qxx_SECTOR_SIZE) {
 		QSPI_W25Qxx_DBG("Erasing sector at address 0x%X", (unsigned int)sector);
-		if((status = QSPI_W25Qxx_SectorErase(sector)) != QSPI_W25Qxx_OK) {
+		if((status = QSPI_W25Qxx_SectorErase(sector + 0x90000000)) != QSPI_W25Qxx_OK) { // 传递内存映射地址给SectorErase
 			QSPI_W25Qxx_ERR("QSPI_W25Qxx_SectorErase failed, status: %d", status);
 			return status;
 		}
 	}
 
 	// 执行写入操作
-	uint32_t current_addr = WriteAddr;
-	uint32_t end_addr = WriteAddr + NumByteToWrite;
+	uint32_t current_addr = physical_addr;
+	uint32_t end_addr = physical_addr + NumByteToWrite;
 	uint32_t current_size;
 	uint8_t* write_data = pBuffer;
 
@@ -732,13 +748,21 @@ int8_t QSPI_W25Qxx_WriteBuffer(uint8_t* pBuffer, uint32_t WriteAddr, uint32_t Nu
 int8_t QSPI_W25Qxx_ReadBuffer(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumByteToRead)
 {
     QSPI_CommandTypeDef s_command;
+    uint32_t physical_addr;
+    
+    // 地址转换：0x90000000 -> 0x0
+    if (ReadAddr >= 0x90000000) {
+        physical_addr = ReadAddr - 0x90000000;
+    } else {
+        physical_addr = ReadAddr;
+    }
     
     /* 使用 Fast Read Quad Output 命令配置 */
     s_command.InstructionMode   = QSPI_INSTRUCTION_1_LINE;    // 1线指令
     s_command.Instruction       = 0x6B;                       // Fast Read Quad Output
     s_command.AddressMode      = QSPI_ADDRESS_1_LINE;        // 1线地址
     s_command.AddressSize      = QSPI_ADDRESS_24_BITS;
-    s_command.Address         = ReadAddr;
+    s_command.Address         = physical_addr;               // 使用物理地址
     s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE; // 无交替字节
     s_command.DataMode         = QSPI_DATA_4_LINES;          // 4线数据输出
     s_command.DummyCycles      = 8;                          // 8个dummy cycles
@@ -748,7 +772,7 @@ int8_t QSPI_W25Qxx_ReadBuffer(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumB
     s_command.SIOOMode        = QSPI_SIOO_INST_EVERY_CMD;
 
     // 添加调试信息
-    QSPI_W25Qxx_DBG("Reading with Quad Output: Addr=0x%08X, Size=%d", ReadAddr, NumByteToRead);
+    QSPI_W25Qxx_DBG("Reading with Quad Output: Addr=0x%08X, Size=%d", physical_addr, NumByteToRead);
 
     // 发送读取命令
     if (HAL_QSPI_Command(&hqspi, &s_command, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
@@ -1143,6 +1167,53 @@ int8_t QSPI_W25Qxx_QuadEnable(void)
     // 等待写入完成
     if (QSPI_W25Qxx_AutoPollingMemReady() != QSPI_W25Qxx_OK) {
         return W25Qxx_ERROR_AUTOPOLLING;
+    }
+
+    return QSPI_W25Qxx_OK;
+}
+
+/**
+ * @brief 单线模式读取数据 (用于元数据读取)
+ * @param pBuffer 读取缓冲区
+ * @param ReadAddr 读取地址
+ * @param NumByteToRead 读取字节数
+ * @retval QSPI_W25Qxx_OK 成功, 其他值表示失败
+ */
+int8_t QSPI_W25Qxx_ReadBuffer_SingleLine(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumByteToRead)
+{
+    QSPI_CommandTypeDef s_command;
+    uint32_t physical_addr;
+    
+    // 地址转换：0x90000000 -> 0x0
+    if (ReadAddr >= 0x90000000) {
+        physical_addr = ReadAddr - 0x90000000;
+    } else {
+        physical_addr = ReadAddr;
+    }
+    
+    /* 使用 Fast Read 单线命令配置 */
+    s_command.InstructionMode   = QSPI_INSTRUCTION_1_LINE;    // 1线指令
+    s_command.Instruction       = 0x0B;                       // Fast Read command
+    s_command.AddressMode      = QSPI_ADDRESS_1_LINE;        // 1线地址
+    s_command.AddressSize      = QSPI_ADDRESS_24_BITS;
+    s_command.Address         = physical_addr;               // 使用物理地址
+    s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE; // 无交替字节
+    s_command.DataMode         = QSPI_DATA_1_LINE;           // 1线数据
+    s_command.DummyCycles      = 8;                          // Fast Read需要8个dummy周期
+    s_command.NbData           = NumByteToRead;
+    s_command.DdrMode          = QSPI_DDR_MODE_DISABLE;
+    s_command.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
+    s_command.SIOOMode         = QSPI_SIOO_INST_EVERY_CMD;
+
+    // 发送命令并接收数据
+    if (HAL_QSPI_Command(&hqspi, &s_command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+        QSPI_W25Qxx_ERR("QSPI_W25Qxx_ReadBuffer_SingleLine: HAL_QSPI_Command failure!");
+        return W25Qxx_ERROR_TRANSMIT;
+    }
+
+    if (HAL_QSPI_Receive(&hqspi, pBuffer, HAL_QSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
+        QSPI_W25Qxx_ERR("QSPI_W25Qxx_ReadBuffer_SingleLine: HAL_QSPI_Receive failure!");
+        return W25Qxx_ERROR_TRANSMIT;
     }
 
     return QSPI_W25Qxx_OK;

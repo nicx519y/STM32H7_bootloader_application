@@ -94,74 +94,59 @@ class SystemInitializer:
         print("🔥 烧录Bootloader到内部Flash...")
         
         # 编译bootloader
-        print("正在编译bootloader...")
         result = subprocess.run(["make", "clean"], cwd=self.bootloader_dir)
         result = subprocess.run(["make", f"-j{self.cpu_count}"], cwd=self.bootloader_dir)
         if result.returncode != 0:
             print("❌ Bootloader编译失败")
             return False
             
-        # 自动烧录bootloader
-        print("正在烧录bootloader...")
-        result = subprocess.run(["make", "flash"], cwd=self.bootloader_dir)
-        if result.returncode != 0:
-            print("❌ Bootloader烧录失败")
+        # 烧录命令（使用OpenOCD）
+        hex_file = self.bootloader_dir / "build" / "bootloader.hex"
+        if not hex_file.exists():
+            print(f"❌ 找不到hex文件: {hex_file}")
             return False
             
-        print("✅ Bootloader烧录成功")
+        print(f"烧录文件: {hex_file}")
+        # 这里需要根据你的调试器配置OpenOCD命令
+        print("请手动执行以下命令烧录Bootloader:")
+        print(f"openocd -f interface/stlink.cfg -f target/stm32h7x.cfg -c \"program {hex_file} verify reset exit\"")
         return True
         
     def flash_metadata(self, metadata_file):
         """烧录元数据到QSPI Flash"""
         print("🔥 烧录元数据到QSPI Flash...")
         
-        # 转换为绝对路径并确保使用正确的路径分隔符
-        metadata_path = str(metadata_file.resolve()).replace('\\', '/')
-        
-        # 使用OpenOCD直接烧录元数据
-        openocd_cmd = [
-            "openocd",
-            "-d0",
-            "-f", "Openocd_Script/ST-LINK-QSPIFLASH.cfg",
-            "-c", "init",
-            "-c", "halt", 
-            "-c", "reset init",
-            "-c", f"flash write_image erase {metadata_path} 0x90000000",
-            "-c", f"flash verify_image {metadata_path} 0x90000000",
-            "-c", "reset run",
-            "-c", "shutdown"
-        ]
-        
-        print(f"正在烧录元数据文件: {metadata_path}")
-        result = subprocess.run(openocd_cmd, cwd=self.bootloader_dir)
-        if result.returncode != 0:
-            print("❌ 元数据烧录失败")
-            return False
-            
-        print("✅ 元数据烧录成功")
-        return True
+        print("请手动执行以下命令烧录元数据:")
+        print(f"openocd -f interface/stlink.cfg -f target/stm32h7x.cfg \\")
+        print(f"  -c \"init\" \\")
+        print(f"  -c \"reset halt\" \\") 
+        print(f"  -c \"flash write_image {metadata_file} 0x90000000\" \\")
+        print(f"  -c \"reset run\" \\")
+        print(f"  -c \"exit\"")
         
     def flash_application_to_slot_a(self):
         """烧录Application到槽位A"""
         print("🔥 烧录Application到槽位A...")
         
         # 编译application
-        print("正在编译application...")
         result = subprocess.run(["make", "clean"], cwd=self.application_dir)
         result = subprocess.run(["make", f"-j{self.cpu_count}"], cwd=self.application_dir)
         if result.returncode != 0:
             print("❌ Application编译失败")
             return False
             
-        # 自动烧录application  
-        print("正在烧录application...")
-        result = subprocess.run(["make", "flash"], cwd=self.application_dir)
-        if result.returncode != 0:
-            print("❌ Application烧录失败")
+        bin_file = self.application_dir / "build" / "application.bin"
+        if not bin_file.exists():
+            print(f"❌ 找不到bin文件: {bin_file}")
             return False
             
-        print("✅ Application烧录成功")
-        return True
+        print("请手动执行以下命令烧录Application:")
+        print(f"openocd -f interface/stlink.cfg -f target/stm32h7x.cfg \\")
+        print(f"  -c \"init\" \\")
+        print(f"  -c \"reset halt\" \\")
+        print(f"  -c \"flash write_image {bin_file} 0x90010000\" \\")
+        print(f"  -c \"reset run\" \\")
+        print(f"  -c \"exit\"")
         
     def init_system(self):
         """完整的系统初始化"""
@@ -169,29 +154,16 @@ class SystemInitializer:
         print("=" * 50)
         
         # 1. 创建初始元数据
-        print("📝 步骤1: 创建初始升级元数据")
         metadata_file = self.create_initial_metadata()
-        if not metadata_file:
-            print("❌ 系统初始化失败：元数据创建失败")
-            return False
         
         # 2. 烧录bootloader
-        print("\n🔥 步骤2: 编译并烧录Bootloader")
-        if not self.flash_bootloader():
-            print("❌ 系统初始化失败：Bootloader烧录失败")
-            return False
+        self.flash_bootloader()
         
         # 3. 烧录元数据
-        print("\n🔥 步骤3: 烧录元数据到QSPI Flash")
-        if not self.flash_metadata(metadata_file):
-            print("❌ 系统初始化失败：元数据烧录失败")
-            return False
+        self.flash_metadata(metadata_file)
         
         # 4. 烧录application
-        print("\n🔥 步骤4: 编译并烧录Application")
-        if not self.flash_application_to_slot_a():
-            print("❌ 系统初始化失败：Application烧录失败")
-            return False
+        self.flash_application_to_slot_a()
         
         print("=" * 50)
         print("✅ 系统初始化完成！")
@@ -199,61 +171,32 @@ class SystemInitializer:
         print("1. 连接串口调试工具，波特率115200")
         print("2. 重启开发板，观察启动日志")
         print("3. 如果正常启动，可以开始开发调试")
-        return True
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='STM32H750 系统初始化脚本',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例用法:
-  python init_system.py --full              # 完整系统初始化（自动编译+自动烧录）
-  python init_system.py init                # 完整系统初始化（兼容模式）
-  python init_system.py metadata            # 仅创建元数据文件
-  python init_system.py flash-bootloader    # 仅烧录bootloader
-  python init_system.py flash-app           # 仅烧录application
-
-注意：
-  - 确保ST-LINK调试器已连接到开发板
-  - 确保OpenOCD已正确安装并在PATH中
-  - 烧录过程中请勿断开调试器连接
-        """
-    )
-    
-    # 添加--full参数
-    parser.add_argument('--full', action='store_true', 
-                       help='执行完整的系统初始化（自动创建元数据+自动编译烧录bootloader+自动烧录元数据+自动编译烧录application）')
-    
-    # 位置参数用于向后兼容
-    parser.add_argument('command', nargs='?', 
-                       choices=['init', 'metadata', 'flash-bootloader', 'flash-app'],
-                       help='要执行的命令（向后兼容模式）')
-    
-    args = parser.parse_args()
-    
-    # 如果没有提供任何参数，显示帮助
-    if not args.full and not args.command:
-        parser.print_help()
+    if len(sys.argv) < 2:
+        print("用法: python init_system.py <command>")
+        print("命令:")
+        print("  init - 完整系统初始化")
+        print("  metadata - 仅创建元数据文件")
+        print("  flash-bootloader - 仅烧录bootloader")
+        print("  flash-app - 仅烧录application")
         return
-    
+        
     project_root = Path(__file__).parent.parent
     initializer = SystemInitializer(project_root)
     
-    # 处理--full参数
-    if args.full:
-        print("🚀 执行完整系统初始化 (--full 模式)")
-        initializer.init_system()
-        return
+    command = sys.argv[1]
     
-    # 处理向后兼容的位置参数
-    if args.command == "init":
+    if command == "init":
         initializer.init_system()
-    elif args.command == "metadata":
+    elif command == "metadata":
         initializer.create_initial_metadata()
-    elif args.command == "flash-bootloader":
+    elif command == "flash-bootloader":
         initializer.flash_bootloader()
-    elif args.command == "flash-app":
+    elif command == "flash-app":
         initializer.flash_application_to_slot_a()
+    else:
+        print(f"未知命令: {command}")
 
 if __name__ == "__main__":
     main() 

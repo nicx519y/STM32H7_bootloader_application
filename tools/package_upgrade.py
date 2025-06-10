@@ -115,7 +115,7 @@ class UpgradePackage:
         size_limits = {
             'application': 1024 * 1024,        # 1MB
             'web_resources': 1536 * 1024,      # 1.5MB
-            'config': 32 * 1024,               # 32KB
+            'config': 64 * 1024,               # 64KB
             'adc_mapping': 64 * 1024            # 64KB
         }
         

@@ -13,6 +13,7 @@
 application/build
 bootloader/build
 release
+docs
 
 
 

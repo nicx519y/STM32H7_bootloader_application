@@ -298,10 +298,10 @@ flash: $(BUILD_DIR)/$(TARGET).hex
 	-c init \
 	-c halt \
 	-c "reset init" \
-	-c "flash write_image erase $(BUILD_DIR)/$(TARGET).hex 0x00000000" \
-	-c "flash verify_image $(BUILD_DIR)/$(TARGET).hex 0x00000000" \
+	-c "flash write_image erase $(BUILD_DIR)/$(TARGET).hex" \
+	-c "flash verify_image $(BUILD_DIR)/$(TARGET).hex" \
 	-c "reset run" \
-	-c shutdown 
+	-c shutdown
 
 #######################################
 # flash web resources
@@ -314,8 +314,8 @@ flash-web-resources:
 	-c init \
 	-c halt \
 	-c "reset init" \
-	-c "flash write_image erase $(WEB_RESOURCES_DIR) 0x90200000" \
-	-c "flash verify_image $(WEB_RESOURCES_DIR) 0x90200000" \
+	-c "flash write_image erase $(WEB_RESOURCES_DIR) 0x90110000" \
+	-c "flash verify_image $(WEB_RESOURCES_DIR) 0x90110000" \
 	-c reset \
 	-c shutdown 
 

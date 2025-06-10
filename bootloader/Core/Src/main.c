@@ -24,6 +24,7 @@
 #include "usart.h"
 #include "qspi-w25q64.h"
 #include "board_cfg.h"
+#include "firmware_upgrade.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -78,8 +79,23 @@ int main(void)
   }
   BOOT_DBG("QSPI_W25Qxx_Init success\r\n");
 
+  // QSPI_W25Qxx_Test(0x90500000);
+
   // QSPI_W25Qxx_Test(0x00500000);
 
+  // 初始化升级管理器
+  if(upgrade_manager_init() != 0) {
+    BOOT_ERR("upgrade_manager_init failed\r\n");
+    // 即使失败也继续，使用默认槽位A
+  }
+
+  // 检查是否有升级待处理
+  if(upgrade_check_pending()) {
+    BOOT_DBG("Processing pending upgrade...\r\n");
+    if(upgrade_process_pending() != 0) {
+      BOOT_ERR("Upgrade process failed, continuing with current slot\r\n");
+    }
+  }
 
   JumpToApplication();
 
@@ -255,15 +271,28 @@ void JumpToApplication(void)
     if(QSPI_W25Qxx_EnterMemoryMappedMode() != QSPI_W25Qxx_OK)
     {
       BOOT_ERR("QSPI_W25Qxx_EnterMemoryMappedMode failed\r\n");
+      return;
     }
 
     BOOT_DBG("QSPI_W25Qxx_EnterMemoryMappedMode success\r\n");
 
-    uint32_t jump_address = *(__IO uint32_t*)(W25Qxx_Mem_Addr + 4);
-    uint32_t app_stack = *(__IO uint32_t*)W25Qxx_Mem_Addr;
+    // 获取活动槽位
+    upgrade_slot_t active_slot = upgrade_get_active_slot();
+    uint32_t app_base_addr;
     
-    BOOT_DBG("App Stack address: 0x%08X, App Stack value: 0x%08X", W25Qxx_Mem_Addr, *(__IO uint32_t*)W25Qxx_Mem_Addr);
-    BOOT_DBG("Jump Address: 0x%08X, Jump Address value: 0x%08X", W25Qxx_Mem_Addr + 4, *(__IO uint32_t*)(W25Qxx_Mem_Addr + 4));
+    if(active_slot == UPGRADE_SLOT_B) {
+        app_base_addr = APPLICATION_SLOT_B_ADDR;  // 0x902B0000
+        BOOT_DBG("Using Slot B at: 0x%08X", app_base_addr);
+    } else {
+        app_base_addr = APPLICATION_SLOT_A_ADDR;  // 0x90010000
+        BOOT_DBG("Using Slot A at: 0x%08X", app_base_addr);
+    }
+
+    uint32_t jump_address = *(__IO uint32_t*)(app_base_addr + 4);
+    uint32_t app_stack = *(__IO uint32_t*)app_base_addr;
+    
+    BOOT_DBG("App Stack address: 0x%08X, App Stack value: 0x%08X", app_base_addr, app_stack);
+    BOOT_DBG("Jump Address: 0x%08X, Jump Address value: 0x%08X", app_base_addr + 4, jump_address);
 
     // 验证栈指针和跳转地址
     if ((app_stack & 0xFF000000) != 0x20000000) {
@@ -286,7 +315,6 @@ void JumpToApplication(void)
     for(int i = 0; i < 4; i++) {
         BOOT_DBG("  Instruction %d: 0x%04X", i, code_ptr[i]);
     }
-
 
     /****************************  跳转前准备  ************************* */
     SysTick->CTRL = 0;		                        // 关闭SysTick
@@ -315,7 +343,7 @@ void JumpToApplication(void)
     HAL_MPU_Disable();
 
     // 设置向量表
-    SCB->VTOR = W25Qxx_Mem_Addr;
+    SCB->VTOR = app_base_addr;
     BOOT_DBG("VTOR set to: 0x%08X", SCB->VTOR);
     
     // 验证向量表设置是否生效

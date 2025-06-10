@@ -165,7 +165,7 @@ int upgrade_write_component_data(const char *component_name, const uint8_t *data
     
     addr += offset;
     
-    if (QSPI_W25Qxx_WriteBuffer((uint8_t*)data, addr, size) != QSPI_W25Qxx_OK) {
+    if (QSPI_W25Qxx_WriteBuffer((uint8_t*)data, QSPI_PHYSICAL_ADDR(addr), size) != QSPI_W25Qxx_OK) {
         printf("[UPGRADE] Write failed for %s at 0x%08lX\r\n", component_name, addr);
         return -1;
     }
@@ -361,7 +361,7 @@ int upgrade_erase_component_sectors(const char *component_name, bool is_backup_s
     }
     
     /* 擦除对应的扇区 */
-    if (QSPI_W25Qxx_SectorErase(addr) != QSPI_W25Qxx_OK) {
+    if (QSPI_W25Qxx_SectorErase(QSPI_PHYSICAL_ADDR(addr)) != QSPI_W25Qxx_OK) {
         printf("[UPGRADE] Erase failed for %s at 0x%08lX\r\n", component_name, addr);
         return -1;
     }
@@ -419,12 +419,12 @@ static int write_upgrade_metadata(const upgrade_request_t *request)
     metadata.crc32 = calculate_crc32((uint8_t*)&metadata, sizeof(metadata) - sizeof(uint32_t));
     
     /* 擦除元数据扇区 */
-    if (QSPI_W25Qxx_SectorErase(UPGRADE_METADATA_ADDR) != QSPI_W25Qxx_OK) {
+    if (QSPI_W25Qxx_SectorErase(QSPI_PHYSICAL_ADDR(UPGRADE_METADATA_ADDR)) != QSPI_W25Qxx_OK) {
         return -1;
     }
     
     /* 写入元数据 */
-    if (QSPI_W25Qxx_WriteBuffer((uint8_t*)&metadata, UPGRADE_METADATA_ADDR, sizeof(metadata)) != QSPI_W25Qxx_OK) {
+    if (QSPI_W25Qxx_WriteBuffer((uint8_t*)&metadata, QSPI_PHYSICAL_ADDR(UPGRADE_METADATA_ADDR), sizeof(metadata)) != QSPI_W25Qxx_OK) {
         return -1;
     }
     

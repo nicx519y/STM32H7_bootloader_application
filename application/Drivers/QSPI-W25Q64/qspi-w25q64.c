@@ -738,7 +738,7 @@ int8_t QSPI_W25Qxx_ReadBuffer(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumB
     s_command.Instruction       = 0x6B;                       // Fast Read Quad Output
     s_command.AddressMode      = QSPI_ADDRESS_1_LINE;        // 1线地址
     s_command.AddressSize      = QSPI_ADDRESS_24_BITS;
-    s_command.Address         = ReadAddr;
+    s_command.Address         = ReadAddr;                    // 直接使用传入的地址（应该是物理地址）
     s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE; // 无交替字节
     s_command.DataMode         = QSPI_DATA_4_LINES;          // 4线数据输出
     s_command.DummyCycles      = 8;                          // 8个dummy cycles

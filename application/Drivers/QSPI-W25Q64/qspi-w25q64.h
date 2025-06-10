@@ -9,7 +9,7 @@
 extern "C" {
 #endif
 
-#define QSPI_W25Qxx_DEBUG 0
+#define QSPI_W25Qxx_DEBUG 1
 
 #if QSPI_W25Qxx_DEBUG
     #define QSPI_W25Qxx_DBG(fmt, ...) printf("[QSPI_W25Qxx] " fmt "\r\n", ##__VA_ARGS__)
@@ -19,7 +19,9 @@ extern "C" {
     #define QSPI_W25Qxx_ERR(fmt, ...) ((void)0)
 #endif
 
-
+/*----------------------------------------------- 地址转换宏 -------------------------------------------*/
+#define QSPI_MEM_MAPPED_BASE        0x90000000  // QSPI内存映射基地址
+#define QSPI_PHYSICAL_ADDR(addr)    (((addr) >= QSPI_MEM_MAPPED_BASE) ? ((addr) - QSPI_MEM_MAPPED_BASE) : (addr))
 
 /*----------------------------------------------- 命名参数宏 -------------------------------------------*/
 

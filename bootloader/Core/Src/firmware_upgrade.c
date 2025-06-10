@@ -188,8 +188,8 @@ int upgrade_read_metadata(upgrade_metadata_t *metadata)
 {
     BOOT_DBG("[METADATA] Starting metadata read from address 0x%08X", UPGRADE_METADATA_ADDR);
     
-    // 直接使用四线读取
-    int qspi_result = QSPI_W25Qxx_ReadBuffer((uint8_t*)metadata, UPGRADE_METADATA_ADDR, sizeof(upgrade_metadata_t));
+    // 直接使用四线读取，添加地址转换
+    int qspi_result = QSPI_W25Qxx_ReadBuffer((uint8_t*)metadata, QSPI_PHYSICAL_ADDR(UPGRADE_METADATA_ADDR), sizeof(upgrade_metadata_t));
     if (qspi_result == QSPI_W25Qxx_OK) {
         BOOT_DBG("[METADATA] QSPI read successful, data size: %d bytes", sizeof(upgrade_metadata_t));
         
@@ -235,12 +235,12 @@ int upgrade_write_metadata(const upgrade_metadata_t *metadata)
     temp_metadata.crc32 = upgrade_calculate_metadata_crc32(&temp_metadata);
     
     /* 擦除扇区 */
-    if (QSPI_W25Qxx_SectorErase(UPGRADE_METADATA_ADDR) != QSPI_W25Qxx_OK) {
+    if (QSPI_W25Qxx_SectorErase(QSPI_PHYSICAL_ADDR(UPGRADE_METADATA_ADDR)) != QSPI_W25Qxx_OK) {
         return -1;
     }
     
     /* 写入数据 */
-    if (QSPI_W25Qxx_WriteBuffer((uint8_t*)&temp_metadata, UPGRADE_METADATA_ADDR, sizeof(upgrade_metadata_t)) != QSPI_W25Qxx_OK) {
+    if (QSPI_W25Qxx_WriteBuffer((uint8_t*)&temp_metadata, QSPI_PHYSICAL_ADDR(UPGRADE_METADATA_ADDR), sizeof(upgrade_metadata_t)) != QSPI_W25Qxx_OK) {
         return -1;
     }
     
@@ -321,7 +321,7 @@ int upgrade_verify_component(upgrade_slot_t slot, upgrade_type_t type, const com
     while (remaining > 0) {
         uint32_t read_size = (remaining > sizeof(buffer)) ? sizeof(buffer) : remaining;
         
-        if (QSPI_W25Qxx_ReadBuffer(buffer, addr + offset, read_size) != QSPI_W25Qxx_OK) {
+        if (QSPI_W25Qxx_ReadBuffer(buffer, QSPI_PHYSICAL_ADDR(addr + offset), read_size) != QSPI_W25Qxx_OK) {
             return -1;
         }
         

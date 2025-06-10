@@ -748,21 +748,13 @@ int8_t QSPI_W25Qxx_WriteBuffer(uint8_t* pBuffer, uint32_t WriteAddr, uint32_t Nu
 int8_t QSPI_W25Qxx_ReadBuffer(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumByteToRead)
 {
     QSPI_CommandTypeDef s_command;
-    uint32_t physical_addr;
-    
-    // 地址转换：0x90000000 -> 0x0
-    if (ReadAddr >= 0x90000000) {
-        physical_addr = ReadAddr - 0x90000000;
-    } else {
-        physical_addr = ReadAddr;
-    }
     
     /* 使用 Fast Read Quad Output 命令配置 */
     s_command.InstructionMode   = QSPI_INSTRUCTION_1_LINE;    // 1线指令
     s_command.Instruction       = 0x6B;                       // Fast Read Quad Output
     s_command.AddressMode      = QSPI_ADDRESS_1_LINE;        // 1线地址
     s_command.AddressSize      = QSPI_ADDRESS_24_BITS;
-    s_command.Address         = physical_addr;               // 使用物理地址
+    s_command.Address         = ReadAddr;                     // 直接使用传入的地址（应该是物理地址）
     s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE; // 无交替字节
     s_command.DataMode         = QSPI_DATA_4_LINES;          // 4线数据输出
     s_command.DummyCycles      = 8;                          // 8个dummy cycles
@@ -772,7 +764,7 @@ int8_t QSPI_W25Qxx_ReadBuffer(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumB
     s_command.SIOOMode        = QSPI_SIOO_INST_EVERY_CMD;
 
     // 添加调试信息
-    QSPI_W25Qxx_DBG("Reading with Quad Output: Addr=0x%08X, Size=%d", physical_addr, NumByteToRead);
+    QSPI_W25Qxx_DBG("Reading with Quad Output: Addr=0x%08X, Size=%d", ReadAddr, NumByteToRead);
 
     // 发送读取命令
     if (HAL_QSPI_Command(&hqspi, &s_command, HAL_QPSI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
@@ -1167,53 +1159,6 @@ int8_t QSPI_W25Qxx_QuadEnable(void)
     // 等待写入完成
     if (QSPI_W25Qxx_AutoPollingMemReady() != QSPI_W25Qxx_OK) {
         return W25Qxx_ERROR_AUTOPOLLING;
-    }
-
-    return QSPI_W25Qxx_OK;
-}
-
-/**
- * @brief 单线模式读取数据 (用于元数据读取)
- * @param pBuffer 读取缓冲区
- * @param ReadAddr 读取地址
- * @param NumByteToRead 读取字节数
- * @retval QSPI_W25Qxx_OK 成功, 其他值表示失败
- */
-int8_t QSPI_W25Qxx_ReadBuffer_SingleLine(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumByteToRead)
-{
-    QSPI_CommandTypeDef s_command;
-    uint32_t physical_addr;
-    
-    // 地址转换：0x90000000 -> 0x0
-    if (ReadAddr >= 0x90000000) {
-        physical_addr = ReadAddr - 0x90000000;
-    } else {
-        physical_addr = ReadAddr;
-    }
-    
-    /* 使用 Fast Read 单线命令配置 */
-    s_command.InstructionMode   = QSPI_INSTRUCTION_1_LINE;    // 1线指令
-    s_command.Instruction       = 0x0B;                       // Fast Read command
-    s_command.AddressMode      = QSPI_ADDRESS_1_LINE;        // 1线地址
-    s_command.AddressSize      = QSPI_ADDRESS_24_BITS;
-    s_command.Address         = physical_addr;               // 使用物理地址
-    s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE; // 无交替字节
-    s_command.DataMode         = QSPI_DATA_1_LINE;           // 1线数据
-    s_command.DummyCycles      = 8;                          // Fast Read需要8个dummy周期
-    s_command.NbData           = NumByteToRead;
-    s_command.DdrMode          = QSPI_DDR_MODE_DISABLE;
-    s_command.DdrHoldHalfCycle = QSPI_DDR_HHC_ANALOG_DELAY;
-    s_command.SIOOMode         = QSPI_SIOO_INST_EVERY_CMD;
-
-    // 发送命令并接收数据
-    if (HAL_QSPI_Command(&hqspi, &s_command, HAL_QSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
-        QSPI_W25Qxx_ERR("QSPI_W25Qxx_ReadBuffer_SingleLine: HAL_QSPI_Command failure!");
-        return W25Qxx_ERROR_TRANSMIT;
-    }
-
-    if (HAL_QSPI_Receive(&hqspi, pBuffer, HAL_QSPI_TIMEOUT_DEFAULT_VALUE) != HAL_OK) {
-        QSPI_W25Qxx_ERR("QSPI_W25Qxx_ReadBuffer_SingleLine: HAL_QSPI_Receive failure!");
-        return W25Qxx_ERROR_TRANSMIT;
     }
 
     return QSPI_W25Qxx_OK;

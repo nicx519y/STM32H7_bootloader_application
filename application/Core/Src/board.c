@@ -59,10 +59,8 @@ void board_init(void)
 
     HAL_Delay(100);
 
-    QSPI_W25Qxx_Init(); // 初始化QSPI Flash不执行 因为bootloader已经初始化
-    // APP_DBG("board init: QSPI_W25Qxx_Init success.");
-
-    // QSPI_W25Qxx_Test(0x00500000);
+    QSPI_W25Qxx_Init(); // 初始化QSPI Flash
+    APP_DBG("board init: QSPI_W25Qxx_Init success.");
 
     // QSPI_W25Qxx_Test(0x00500000);
     

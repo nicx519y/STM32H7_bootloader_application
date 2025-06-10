@@ -41,7 +41,7 @@ void enableFPU(void);
 int main(void)
 {
     
-    UserLEDClose(); // 关闭LED 表示已经进入main函数
+    
     /************************************************ 系统初始化 ************************************************* */
     // 使能中断
     __enable_irq(); 
@@ -49,17 +49,20 @@ int main(void)
     HAL_Init();
     HAL_Delay(200); // 延时200ms 等待时钟稳定，并且验证时钟配置是否正确 中断是否可用
 
+    UserLEDClose(); // 关闭LED 表示已经进入main函数
+
     SCB_EnableDCache(); // 使能数据缓存
     SCB_EnableICache(); // 使能指令缓存
 
     board_init(); // 初始化板子 时钟 W25Q64 串口 WS2812B 等
 
-    
-
 #if SYSTEM_CHECK_ENABLE == 1
     dataSectionTest(); // 测试各个段，测试堆内存
     floatTest(); // 测试FPU 是否能打印浮点数
 #endif
+
+    
+
     cpp_main();
 
 

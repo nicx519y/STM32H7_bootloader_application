@@ -57,11 +57,15 @@ void board_init(void)
     APP_DBG("board init: PCLK1: %lu", HAL_RCC_GetPCLK1Freq());
     APP_DBG("board init: PCLK2: %lu", HAL_RCC_GetPCLK2Freq());
 
+    HAL_Delay(100);
+
     QSPI_W25Qxx_Init(); // 初始化QSPI Flash不执行 因为bootloader已经初始化
-    APP_DBG("board init: QSPI_W25Qxx_Init success.");
+    // APP_DBG("board init: QSPI_W25Qxx_Init success.");
 
     // QSPI_W25Qxx_Test(0x00500000);
 
+    // QSPI_W25Qxx_Test(0x00500000);
+    
     MX_TIM2_Init(); // 8000频率定时器 并开启中断模式
     APP_DBG("board init: MX_TIM2_Init success.");
 

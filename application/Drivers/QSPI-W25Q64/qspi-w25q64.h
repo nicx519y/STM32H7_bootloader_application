@@ -138,8 +138,3 @@ int8_t QSPI_W25Qxx_QuadEnable(void);
 #endif
 
 #endif /* __QSPI_W25Q64_H */ 
-
-
-
-
-

@@ -65,6 +65,7 @@
         "board_api.h": "c",
         "tusb_option.h": "c",
         "tusb_config.h": "c",
-        "cstring": "cpp"
+        "cstring": "cpp",
+        "tim.h": "c"
     }
 }

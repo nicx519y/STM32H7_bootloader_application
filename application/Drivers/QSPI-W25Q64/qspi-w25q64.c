@@ -1147,5 +1147,3 @@ int8_t QSPI_W25Qxx_QuadEnable(void)
 
     return QSPI_W25Qxx_OK;
 }
-
-

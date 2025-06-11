@@ -162,9 +162,47 @@ int8_t QSPI_W25Qxx_Init(void)
 {
     uint32_t Device_ID;
     
+    QSPI_W25Qxx_DBG("begin QSPI_W25Qxx_Init...");
+    
+    // 安全检查：如果QSPI处于内存映射模式，先强制退出
+    // 这对于从QSPI Flash启动的情况特别重要
+    // 注释掉强制退出XIP模式，保持系统原有状态
+    /*
+    if (QUADSPI->CCR & QUADSPI_CCR_FMODE) {
+        QSPI_W25Qxx_DBG("QSPI is XIP mode, exit...");
+        
+        // 方法1：直接禁用QSPI，然后重新启用
+        QUADSPI->CR &= ~QUADSPI_CR_EN;  // 禁用QSPI
+        // 等待禁用完成
+        while(QUADSPI->CR & QUADSPI_CR_EN);
+        
+        // 短暂延时确保状态稳定
+        for(volatile uint32_t i = 0; i < 1000; i++);
+        
+        // 重新启用QSPI
+        QUADSPI->CR |= QUADSPI_CR_EN;   // 重新启用QSPI
+        // 等待启用完成  
+        while(!(QUADSPI->CR & QUADSPI_CR_EN));
+        
+        QSPI_W25Qxx_DBG("QSPI is XIP mode, exit success!");
+    }
+    */
+    
+    // 检查是否已经在XIP模式，如果是就跳过初始化
+    if (QUADSPI->CCR & QUADSPI_CCR_FMODE) {
+        QSPI_W25Qxx_DBG("QSPI already in XIP mode, skipping reinit");
+        xip_enabled = true;
+        return QSPI_W25Qxx_OK;
+    }
+    
+    // 额外延时确保系统完全稳定
+    for(volatile uint32_t i = 0; i < 10000; i++);
+    
     MX_QUADSPI_Init();
     QSPI_W25Qxx_Reset();
+	QSPI_W25Qxx_DBG("QSPI_W25Qxx_Init");
     Device_ID = QSPI_W25Qxx_ReadID();
+	QSPI_W25Qxx_DBG("Device_ID:%X", (unsigned int)Device_ID);
     
     if(Device_ID == W25Qxx_FLASH_ID)
     {   
@@ -173,6 +211,7 @@ int8_t QSPI_W25Qxx_Init(void)
             QSPI_W25Qxx_DBG("Quad Enable failed!");
             return W25Qxx_ERROR_INIT;
         }
+		QSPI_W25Qxx_DBG("QSPI_W25Qxx_Init success!");
         return QSPI_W25Qxx_OK;
     }
     else
@@ -738,7 +777,7 @@ int8_t QSPI_W25Qxx_ReadBuffer(uint8_t* pBuffer, uint32_t ReadAddr, uint32_t NumB
     s_command.Instruction       = 0x6B;                       // Fast Read Quad Output
     s_command.AddressMode      = QSPI_ADDRESS_1_LINE;        // 1线地址
     s_command.AddressSize      = QSPI_ADDRESS_24_BITS;
-    s_command.Address         = ReadAddr;                    // 直接使用传入的地址（应该是物理地址）
+    s_command.Address         = ReadAddr;
     s_command.AlternateByteMode = QSPI_ALTERNATE_BYTES_NONE; // 无交替字节
     s_command.DataMode         = QSPI_DATA_4_LINES;          // 4线数据输出
     s_command.DummyCycles      = 8;                          // 8个dummy cycles

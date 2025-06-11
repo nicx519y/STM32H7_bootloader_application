@@ -146,8 +146,12 @@ slot_ready:
 
     /* 拷贝向量表 */
     mov r0, r7                  /* 槽位基地址 */
+    ldr r3, =_sivector          /* 获取向量表在Flash中的偏移 */
+    ldr r4, =APPLICATION_SLOT_A_ADDR
+    sub r3, r3, r4              /* 计算相对偏移 */
+    add r0, r0, r3              /* 槽位地址 + 偏移 = 源地址 */
     ldr r1, =0x00000000         /* 目标地址：ITCMRAM */
-    ldr r2, =_evector           /* 结束地址 */
+    ldr r2, =_evector           /* 目标结束地址：ITCMRAM中向量表结束地址 */
     bl copy_section
 
     /* 拷贝 .text 段 */
@@ -288,6 +292,8 @@ skip_fini:
     /* 跳转到 main - 使用简单的bx跳转 */
     ldr r0, =main           /* 获取 main 函数地址 */
     bx  r0                  /* 直接跳转，不保存返回地址 */
+    
+.size  Reset_Handler, .-Reset_Handler
 
 /**
  * @brief  This is the code that gets called when the processor receives an

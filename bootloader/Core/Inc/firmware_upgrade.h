@@ -103,6 +103,9 @@ typedef struct {
 /* 存储器地址定义 (基于0x90000000 QSPI基地址) */
 #define QSPI_BASE_ADDR                  0x90000000
 
+/* QSPI地址转换宏 - 将QSPI逻辑地址转换为物理地址(相对于flash起始的偏移) */
+#define QSPI_PHYSICAL_ADDR(addr)        ((addr) - QSPI_BASE_ADDR)
+
 /* 元数据存储地址 (第一个扇区) */
 #define UPGRADE_METADATA_ADDR           0x90000000      /* 升级元数据区 (64KB) */
 

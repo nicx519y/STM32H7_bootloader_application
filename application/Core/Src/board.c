@@ -50,7 +50,6 @@ void board_init(void)
 
     USART1_Init(); // USART for debug
     APP_DBG("board init: USART1_Init success.");
-
     // 验证时钟配置
     APP_DBG("board init: SYSCLK: %lu", HAL_RCC_GetSysClockFreq());
     APP_DBG("board init: HCLK: %lu", HAL_RCC_GetHCLKFreq());
@@ -59,12 +58,22 @@ void board_init(void)
 
     HAL_Delay(100);
 
-    QSPI_W25Qxx_Init(); // 初始化QSPI Flash
-    APP_DBG("board init: QSPI_W25Qxx_Init success.");
-
-    // QSPI_W25Qxx_Test(0x00500000);
+    APP_DBG("board init: begin QSPI_W25Qxx_Init...");
     
-    MX_TIM2_Init(); // 8000频率定时器 并开启中断模式
+    // 临时禁用中断，防止中断处理程序干扰QSPI初始化
+    __disable_irq();
+    APP_DBG("board init: interrupts disabled before QSPI init");
+
+    QSPI_W25Qxx_Init();
+    
+    // 重新启用中断
+    __enable_irq();
+    APP_DBG("board init: interrupts re-enabled after QSPI init");
+    APP_DBG("board init: QSPI_W25Qxx_Init success.");
+    // QSPI_W25Qxx_ExitMemoryMappedMode();
+    // QSPI_W25Qxx_Test(0x00500000);  // 暂时注释掉测试
+    
+    // MX_TIM2_Init(); // 8000频率定时器 并开启中断模式
     APP_DBG("board init: MX_TIM2_Init success.");
 
     USB_clock_init();

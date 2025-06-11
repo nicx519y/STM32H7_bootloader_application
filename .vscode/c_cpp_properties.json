@@ -26,7 +26,9 @@
                 "${workspaceFolder}/bootloader/Drivers/STM32H7xx_HAL_Driver/Inc",
                 "${workspaceFolder}/bootloader/Drivers/STM32H7xx_HAL_Driver/Inc/Legacy",
                 "${workspaceFolder}/bootloader/Drivers/CMSIS/Device/ST/STM32H7xx/Include",
-                "${workspaceFolder}/bootloader/Drivers/CMSIS/Include"
+                "${workspaceFolder}/bootloader/Drivers/CMSIS/Include",
+                "${workspaceFolder}/bootloader/Drivers/QSPI-W25Q64",
+                "${workspaceFolder}/bootloader/Drivers/USART"
                 
             ],
             "defines": [

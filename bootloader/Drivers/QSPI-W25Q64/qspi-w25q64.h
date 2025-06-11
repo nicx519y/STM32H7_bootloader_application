@@ -19,9 +19,7 @@ extern "C" {
     #define QSPI_W25Qxx_ERR(fmt, ...) ((void)0)
 #endif
 
-/*----------------------------------------------- 地址转换宏 -------------------------------------------*/
-#define QSPI_MEM_MAPPED_BASE        0x90000000  // QSPI内存映射基地址
-#define QSPI_PHYSICAL_ADDR(addr)    (((addr) >= QSPI_MEM_MAPPED_BASE) ? ((addr) - QSPI_MEM_MAPPED_BASE) : (addr))
+
 
 /*----------------------------------------------- 命名参数宏 -------------------------------------------*/
 
@@ -140,8 +138,3 @@ int8_t QSPI_W25Qxx_QuadEnable(void);
 #endif
 
 #endif /* __QSPI_W25Q64_H */ 
-
-
-
-
-
